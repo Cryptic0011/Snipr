@@ -20,12 +20,12 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .padding(.horizontal, 52)
-                .padding(.top, 76)
-                .padding(.bottom, 24)
+                .padding(.top, 62)
+                .padding(.bottom, 12)
 
                 BottomStrip(model: model)
                     .padding(.horizontal, 26)
-                    .padding(.bottom, 18)
+                    .padding(.bottom, 10)
             }
         }
         .foregroundStyle(.white)
@@ -78,7 +78,7 @@ private struct HeroPane: View {
     let coordinator: WindowCoordinator
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 26) {
+        VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Ready for\nclean shots?")
                     .font(.system(size: 44, weight: .bold, design: .rounded))
@@ -93,8 +93,7 @@ private struct HeroPane: View {
             }
 
             FloatingKeys()
-                .frame(height: 170)
-                .padding(.top, 8)
+                .frame(height: 145)
 
             VStack(alignment: .leading, spacing: 10) {
                 ActionButton(title: "Capture Area", systemImage: "selection.pin.in.out", shortcut: "⌘⇧4") {
@@ -132,7 +131,7 @@ private struct DashboardPane: View {
     let model: SniprAppModel
 
     var body: some View {
-        VStack(spacing: 22) {
+        VStack(spacing: 14) {
             GlassPanel {
                 VStack(alignment: .leading, spacing: 26) {
                     HStack {
@@ -190,7 +189,7 @@ private struct DashboardPane: View {
                     }
                 }
             }
-            .frame(minHeight: 320, idealHeight: 360, maxHeight: 380)
+            .frame(minHeight: 286, idealHeight: 304, maxHeight: 324)
 
             GlassPanel {
                 VStack(alignment: .leading, spacing: 16) {
@@ -262,7 +261,7 @@ private struct PermissionRow: View {
             }
             .buttonStyle(OutlineStatusButtonStyle(isGranted: isGranted))
         }
-        .padding(.vertical, 18)
+        .padding(.vertical, 13)
     }
 }
 
@@ -440,7 +439,7 @@ private struct GlassPanel<Content: View>: View {
 
     var body: some View {
         content
-            .padding(28)
+            .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(
                 RoundedRectangle(cornerRadius: 8)
