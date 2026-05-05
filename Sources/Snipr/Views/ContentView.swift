@@ -20,7 +20,7 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .padding(.horizontal, 52)
-                .padding(.top, 54)
+                .padding(.top, 76)
                 .padding(.bottom, 24)
 
                 BottomStrip(model: model)
@@ -79,8 +79,6 @@ private struct HeroPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 26) {
-            Pill(text: "Local Capture")
-
             VStack(alignment: .leading, spacing: 12) {
                 Text("Ready for\nclean shots?")
                     .font(.system(size: 44, weight: .bold, design: .rounded))
@@ -457,19 +455,6 @@ private struct GlassPanel<Content: View>: View {
                     )
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.08)))
             )
-    }
-}
-
-private struct Pill: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(Color(red: 1.0, green: 0.42, blue: 0.48))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 5)
-            .background(Color(red: 0.45, green: 0.08, blue: 0.12).opacity(0.7), in: Capsule())
     }
 }
 
