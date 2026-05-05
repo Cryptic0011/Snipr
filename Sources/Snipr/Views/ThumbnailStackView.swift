@@ -5,15 +5,35 @@ struct ThumbnailStackView: View {
     let coordinator: WindowCoordinator
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            ForEach(Array(store.items.prefix(5).enumerated()), id: \.element.id) { index, item in
-                ThumbnailView(item: item, coordinator: coordinator)
-                    .offset(x: CGFloat(index) * -5, y: CGFloat(index) * 16)
-                    .zIndex(Double(10 - index))
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Snipr Stack")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.86))
+
+                Spacer()
+
+                Text("\(store.items.count)")
+                    .font(.caption2.monospacedDigit().weight(.bold))
+                    .foregroundStyle(.white.opacity(0.54))
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(.white.opacity(0.08), in: Capsule())
             }
+
+            ScrollView {
+                LazyVStack(spacing: 10) {
+                    ForEach(store.items.prefix(12)) { item in
+                        ThumbnailView(item: item, coordinator: coordinator)
+                    }
+                }
+            }
+            .scrollIndicators(.visible)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        .padding(10)
+        .background(Color(red: 0.055, green: 0.055, blue: 0.065).opacity(0.92), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.14)))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
@@ -27,20 +47,28 @@ private struct ThumbnailView: View {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 160, height: 100)
+                    .frame(width: 188, height: 106)
                     .clipped()
             } else {
                 Rectangle()
                     .fill(.secondary.opacity(0.2))
-                    .frame(width: 160, height: 100)
+                    .frame(width: 188, height: 106)
                     .overlay(Image(systemName: "exclamationmark.triangle"))
             }
 
-            Text(item.dimensionsText)
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.white.opacity(0.68))
-                .padding(.horizontal, 6)
-                .padding(.bottom, 6)
+            HStack {
+                Text(item.dimensionsText)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.68))
+
+                Spacer()
+
+                Image(systemName: "arrow.up.right")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+            .padding(.horizontal, 7)
+            .padding(.bottom, 7)
         }
         .background(Color(red: 0.08, green: 0.08, blue: 0.09).opacity(0.96), in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.14)))

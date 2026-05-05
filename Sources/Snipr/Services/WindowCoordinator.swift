@@ -87,7 +87,8 @@ final class WindowCoordinator {
             return
         }
 
-        let size = NSSize(width: 190, height: min(420, 118 + (captureStore.items.prefix(5).count - 1) * 24))
+        let visibleItemCount = max(1, captureStore.items.prefix(6).count)
+        let size = NSSize(width: 220, height: min(560, 48 + visibleItemCount * 136))
         let origin = NSPoint(
             x: screen.visibleFrame.maxX - size.width - 24,
             y: screen.visibleFrame.minY + 24
