@@ -201,6 +201,13 @@ final class WindowCoordinator {
     private func completeCapture(displayID: CGDirectDisplayID, screen: NSScreen, rect: CGRect) {
         closeCaptureOverlays()
 
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            self?.storeCapture(displayID: displayID, screen: screen, rect: rect)
+        }
+    }
+
+    private func storeCapture(displayID: CGDirectDisplayID, screen: NSScreen, rect: CGRect) {
         do {
             let capturedImage = try captureService.capture(displayID: displayID, rectInDisplayPoints: rect, screen: screen)
             _ = try captureStore.addCapture(
@@ -215,7 +222,11 @@ final class WindowCoordinator {
     }
 
     private func closeCaptureOverlays() {
-        overlayWindows.forEach { $0.orderOut(nil) }
+        overlayWindows.forEach { window in
+            window.contentView = nil
+            window.orderOut(nil)
+            window.close()
+        }
         overlayWindows.removeAll()
     }
 
