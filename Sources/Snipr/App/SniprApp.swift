@@ -8,7 +8,8 @@ struct SniprApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(model: model)
-                .frame(minWidth: 760, minHeight: 460)
+                .frame(minWidth: 1080, minHeight: 640)
+                .preferredColorScheme(.dark)
                 .onAppear {
                     appDelegate.configure(with: model)
                 }
