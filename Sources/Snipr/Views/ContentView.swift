@@ -79,6 +79,24 @@ private struct HeroPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
+            HStack(spacing: 18) {
+                Image(nsImage: logoImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 76, height: 76)
+                    .shadow(color: .white.opacity(0.16), radius: 16)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Snipr")
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+
+                    Text(capturesCount == 0 ? "Local capture utility" : "\(capturesCount) captures stored")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.54))
+                }
+            }
+            .padding(.bottom, 4)
+
             VStack(alignment: .leading, spacing: 12) {
                 Text("Ready for\nclean shots?")
                     .font(.system(size: 44, weight: .bold, design: .rounded))
@@ -106,22 +124,6 @@ private struct HeroPane: View {
             }
 
             Spacer(minLength: 0)
-
-            HStack(spacing: 12) {
-                Image(nsImage: logoImage)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 34, height: 34)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Snipr")
-                        .font(.system(size: 13, weight: .bold))
-
-                    Text(capturesCount == 0 ? "No captures yet" : "\(capturesCount) captures stored")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.48))
-                }
-            }
         }
         .frame(maxHeight: .infinity, alignment: .topLeading)
     }
