@@ -1,41 +1,60 @@
 import SwiftUI
 
 enum CaptureToolbarMode: String, CaseIterable, Identifiable {
-    case screenshotArea
-    case recordArea
+    case captureScreen
+    case captureWindow
+    case captureSelection
+    case recordScreen
+    case recordSelection
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .screenshotArea:
-            "Capture Area"
-        case .recordArea:
-            "Record Area"
+        case .captureScreen:
+            "Capture Entire Screen"
+        case .captureWindow:
+            "Capture Window"
+        case .captureSelection:
+            "Capture Selected Portion"
+        case .recordScreen:
+            "Record Entire Screen"
+        case .recordSelection:
+            "Record Selected Portion"
         }
     }
 
     var systemImage: String {
         switch self {
-        case .screenshotArea:
+        case .captureScreen:
+            "display"
+        case .captureWindow:
+            "macwindow"
+        case .captureSelection:
             "selection.pin.in.out"
-        case .recordArea:
+        case .recordScreen:
+            "record.circle"
+        case .recordSelection:
             "rectangle.dashed.badge.record"
         }
     }
 
     var primaryTitle: String {
         switch self {
-        case .screenshotArea:
+        case .captureScreen, .captureWindow, .captureSelection:
             "Capture"
-        case .recordArea:
+        case .recordScreen, .recordSelection:
             "Record"
         }
+    }
+
+    var isEnabled: Bool {
+        self != .captureWindow
     }
 }
 
 struct CaptureToolbarView: View {
-    @State private var selectedMode: CaptureToolbarMode = .screenshotArea
+    @State private var selectedMode: CaptureToolbarMode = .captureSelection
 
     let onCancel: () -> Void
     let onOptions: () -> Void
@@ -56,19 +75,13 @@ struct CaptureToolbarView: View {
                 .frame(height: 30)
                 .padding(.horizontal, 6)
 
-            HStack(spacing: 4) {
-                ForEach(CaptureToolbarMode.allCases) { mode in
-                    Button {
-                        selectedMode = mode
-                    } label: {
-                        Image(systemName: mode.systemImage)
-                            .font(.system(size: 18, weight: .semibold))
-                            .frame(width: 42, height: 34)
-                    }
-                    .buttonStyle(CaptureToolbarIconButtonStyle(isSelected: selectedMode == mode))
-                    .help(mode.title)
-                }
-            }
+            toolbarButtons(for: [.captureScreen, .captureWindow, .captureSelection])
+
+            Divider()
+                .frame(height: 30)
+                .padding(.horizontal, 6)
+
+            toolbarButtons(for: [.recordScreen, .recordSelection])
 
             Divider()
                 .frame(height: 30)
@@ -98,6 +111,7 @@ struct CaptureToolbarView: View {
                     .frame(minWidth: 72, minHeight: 34)
             }
             .buttonStyle(CaptureToolbarPrimaryButtonStyle())
+            .disabled(!selectedMode.isEnabled)
         }
         .font(.system(size: 13, weight: .semibold))
         .foregroundStyle(Color.black.opacity(0.78))
@@ -110,14 +124,39 @@ struct CaptureToolbarView: View {
         )
         .overlay(RoundedRectangle(cornerRadius: 9).stroke(.white.opacity(0.34)))
     }
+
+    private func toolbarButtons(for modes: [CaptureToolbarMode]) -> some View {
+        HStack(spacing: 4) {
+            ForEach(modes) { mode in
+                Button {
+                    selectedMode = mode
+                } label: {
+                    Image(systemName: mode.systemImage)
+                        .font(.system(size: 18, weight: .semibold))
+                        .frame(width: 42, height: 34)
+                        .overlay(alignment: .bottomTrailing) {
+                            if !mode.isEnabled {
+                                Image(systemName: "ellipsis")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(Color.black.opacity(0.42))
+                                    .padding(3)
+                            }
+                        }
+                }
+                .buttonStyle(CaptureToolbarIconButtonStyle(isSelected: selectedMode == mode, isEnabled: mode.isEnabled))
+                .help(mode.isEnabled ? mode.title : "\(mode.title) coming soon")
+            }
+        }
+    }
 }
 
 private struct CaptureToolbarIconButtonStyle: ButtonStyle {
     let isSelected: Bool
+    var isEnabled = true
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(Color.black.opacity(configuration.isPressed ? 0.48 : 0.78))
+            .foregroundStyle(Color.black.opacity(isEnabled ? (configuration.isPressed ? 0.48 : 0.78) : 0.34))
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(isSelected ? Color.black.opacity(0.12) : Color.black.opacity(configuration.isPressed ? 0.08 : 0))

@@ -75,7 +75,7 @@ final class WindowCoordinator {
             return
         }
 
-        let size = NSSize(width: 462, height: 58)
+        let size = NSSize(width: 586, height: 58)
         let origin = NSPoint(
             x: screen.visibleFrame.midX - size.width / 2,
             y: screen.visibleFrame.minY + 34
@@ -168,15 +168,59 @@ final class WindowCoordinator {
         showCaptureOverlays(mode: .screenshot)
     }
 
+    func startCaptureFullScreen() {
+        guard PermissionService.hasScreenRecordingAccess || PermissionService.requestScreenRecordingAccess() else {
+            PermissionService.openScreenRecordingSettings()
+            return
+        }
+
+        guard let screen = NSScreen.main, let displayID = screen.sniprDisplayID else {
+            return
+        }
+
+        completeCapture(displayID: displayID, screen: screen, rect: screen.localCaptureRect)
+    }
+
+    func startScreenRecordingFullScreen() {
+        guard !recordingService.isRecording else {
+            return
+        }
+
+        guard PermissionService.hasScreenRecordingAccess || PermissionService.requestScreenRecordingAccess() else {
+            PermissionService.openScreenRecordingSettings()
+            return
+        }
+
+        guard let screen = NSScreen.main, let displayID = screen.sniprDisplayID else {
+            return
+        }
+
+        startRecording(displayID: displayID, screen: screen, rect: screen.localCaptureRect)
+    }
+
     private func executeCaptureToolbarMode(_ mode: CaptureToolbarMode) {
         hideCaptureToolbar()
 
         switch mode {
-        case .screenshotArea:
+        case .captureScreen:
+            startCaptureFullScreen()
+        case .captureWindow:
+            showWindowCaptureComingSoon()
+        case .captureSelection:
             startCaptureArea()
-        case .recordArea:
+        case .recordScreen:
+            startScreenRecordingFullScreen()
+        case .recordSelection:
             startScreenRecordingArea()
         }
+    }
+
+    private func showWindowCaptureComingSoon() {
+        let alert = NSAlert()
+        alert.messageText = "Window Capture"
+        alert.informativeText = "The toolbar option is in place. Window picking is the next capture mode to wire."
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     func showThumbnailStack() {
@@ -561,4 +605,10 @@ final class WindowCoordinator {
 private enum CaptureOverlayMode {
     case screenshot
     case recording
+}
+
+private extension NSScreen {
+    var localCaptureRect: CGRect {
+        CGRect(origin: .zero, size: frame.size)
+    }
 }
