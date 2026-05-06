@@ -8,6 +8,7 @@ final class WindowCoordinator {
     let captureStore: CaptureStore
     let preferences: SniprPreferences
     private let captureService = ScreenCaptureService()
+    private let recordingService = ScreenRecordingService()
     private var commandPalettePanel: NSPanel?
     private var thumbnailPanel: NSPanel?
     private var thumbnailHideTask: Task<Void, Never>?
@@ -15,6 +16,8 @@ final class WindowCoordinator {
     var isThumbnailStackPinned = false
     private var previewWindows: [UUID: NSWindow] = [:]
     private var overlayWindows: [NSWindow] = []
+    private var recordingHUDPanel: NSPanel?
+    private var activeRecordingDisplayID: CGDirectDisplayID?
 
     init(captureStore: CaptureStore, preferences: SniprPreferences) {
         self.captureStore = captureStore
@@ -64,6 +67,8 @@ final class WindowCoordinator {
         switch command.id {
         case .captureArea:
             startCaptureArea()
+        case .recordArea:
+            startScreenRecordingArea()
         case .openHistory:
             NSApp.activate(ignoringOtherApps: true)
             NSApp.windows.first?.makeKeyAndOrderFront(nil)
@@ -88,12 +93,17 @@ final class WindowCoordinator {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    func showScreenRecordingComingSoon() {
-        let alert = NSAlert()
-        alert.messageText = "Screen Recording"
-        alert.informativeText = "The hotkey is reserved. The recording workflow is not built yet."
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
+    func startScreenRecordingArea() {
+        guard !recordingService.isRecording else {
+            return
+        }
+
+        guard PermissionService.hasScreenRecordingAccess || PermissionService.requestScreenRecordingAccess() else {
+            PermissionService.openScreenRecordingSettings()
+            return
+        }
+
+        showCaptureOverlays(mode: .recording)
     }
 
     func startCaptureArea() {
@@ -102,7 +112,7 @@ final class WindowCoordinator {
             return
         }
 
-        showCaptureOverlays()
+        showCaptureOverlays(mode: .screenshot)
     }
 
     func showThumbnailStack() {
@@ -176,6 +186,14 @@ final class WindowCoordinator {
     }
 
     func openPreview(for item: CaptureItem) {
+        guard item.mediaType == .image else {
+            NSWorkspace.shared.open(item.fileURL)
+            if preferences.hideStackAfterPreview, !isThumbnailStackPinned {
+                hideThumbnailStack()
+            }
+            return
+        }
+
         if let window = previewWindows[item.id] {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -201,11 +219,11 @@ final class WindowCoordinator {
     }
 
     func copy(_ item: CaptureItem) {
-        ImageTransfer.copyImage(at: item.fileURL)
+        ImageTransfer.copy(item)
     }
 
     func saveAs(_ item: CaptureItem) {
-        ImageTransfer.saveImageAs(item)
+        ImageTransfer.saveAs(item)
     }
 
     func reveal(_ item: CaptureItem) {
@@ -232,6 +250,37 @@ final class WindowCoordinator {
         }
     }
 
+    func stopScreenRecording() {
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
+            do {
+                let recordedVideo = try await self.recordingService.stop()
+                self.closeRecordingHUD()
+                _ = try self.captureStore.addRecording(
+                    fileURL: recordedVideo.fileURL,
+                    pixelSize: recordedVideo.pixelSize,
+                    displayID: self.activeRecordingDisplayID,
+                    duration: recordedVideo.duration
+                )
+                self.activeRecordingDisplayID = nil
+                self.showThumbnailStack()
+            } catch {
+                self.activeRecordingDisplayID = nil
+                self.closeRecordingHUD()
+                NSAlert(error: error).runModal()
+            }
+        }
+    }
+
+    func cancelScreenRecording() {
+        recordingService.cancel()
+        activeRecordingDisplayID = nil
+        closeRecordingHUD()
+    }
+
     private func scheduleThumbnailAutoHide(delay explicitDelay: Double? = nil) {
         thumbnailHideTask?.cancel()
 
@@ -255,7 +304,7 @@ final class WindowCoordinator {
         }
     }
 
-    private func showCaptureOverlays() {
+    private func showCaptureOverlays(mode: CaptureOverlayMode) {
         closeCaptureOverlays()
 
         for screen in NSScreen.screens {
@@ -278,7 +327,7 @@ final class WindowCoordinator {
                 rootView: CaptureOverlayView(
                     screen: screen,
                     onComplete: { [weak self] rect in
-                        self?.completeCapture(displayID: displayID, screen: screen, rect: rect)
+                        self?.completeSelection(mode: mode, displayID: displayID, screen: screen, rect: rect)
                     },
                     onCancel: { [weak self] in
                         self?.closeCaptureOverlays()
@@ -288,6 +337,15 @@ final class WindowCoordinator {
 
             overlayWindows.append(window)
             window.orderFrontRegardless()
+        }
+    }
+
+    private func completeSelection(mode: CaptureOverlayMode, displayID: CGDirectDisplayID, screen: NSScreen, rect: CGRect) {
+        switch mode {
+        case .screenshot:
+            completeCapture(displayID: displayID, screen: screen, rect: rect)
+        case .recording:
+            startRecording(displayID: displayID, screen: screen, rect: rect)
         }
     }
 
@@ -314,6 +372,71 @@ final class WindowCoordinator {
         }
     }
 
+    private func startRecording(displayID: CGDirectDisplayID, screen: NSScreen, rect: CGRect) {
+        closeCaptureOverlays()
+
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
+            try? await Task.sleep(nanoseconds: 120_000_000)
+
+            do {
+                let destinationURL = try self.captureStore.nextRecordingURL()
+                try self.recordingService.start(displayID: displayID, rectInDisplayPoints: rect, screen: screen, destinationURL: destinationURL)
+                self.activeRecordingDisplayID = displayID
+                self.showRecordingHUD()
+            } catch {
+                NSAlert(error: error).runModal()
+            }
+        }
+    }
+
+    private func showRecordingHUD() {
+        closeRecordingHUD()
+
+        guard let screen = NSScreen.main else {
+            return
+        }
+
+        let size = NSSize(width: 246, height: 58)
+        let origin = NSPoint(
+            x: screen.visibleFrame.maxX - size.width - 24,
+            y: screen.visibleFrame.maxY - size.height - 24
+        )
+        let panel = NSPanel(
+            contentRect: NSRect(origin: origin, size: size),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.level = .floating
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
+        panel.hasShadow = true
+        panel.contentView = NSHostingView(
+            rootView: RecordingHUDView(
+                startedAt: Date(),
+                onStop: { [weak self] in
+                    self?.stopScreenRecording()
+                },
+                onCancel: { [weak self] in
+                    self?.cancelScreenRecording()
+                }
+            )
+        )
+        recordingHUDPanel = panel
+        panel.orderFrontRegardless()
+    }
+
+    private func closeRecordingHUD() {
+        recordingHUDPanel?.orderOut(nil)
+        recordingHUDPanel?.close()
+        recordingHUDPanel = nil
+    }
+
     private func closeCaptureOverlays() {
         overlayWindows.forEach { window in
             window.contentView = nil
@@ -334,4 +457,9 @@ final class WindowCoordinator {
             panel.center()
         }
     }
+}
+
+private enum CaptureOverlayMode {
+    case screenshot
+    case recording
 }

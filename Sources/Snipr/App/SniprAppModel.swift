@@ -42,7 +42,7 @@ final class SniprAppModel {
         case .captureArea:
             coordinator.startCaptureArea()
         case .screenRecord:
-            coordinator.showScreenRecordingComingSoon()
+            coordinator.startScreenRecordingArea()
         case .commandPalette:
             coordinator.showCommandPalette()
         case .hideStack:

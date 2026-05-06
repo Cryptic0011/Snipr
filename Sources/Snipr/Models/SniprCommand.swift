@@ -2,6 +2,7 @@ import Foundation
 
 enum SniprCommandID: String, CaseIterable, Codable, Sendable {
     case captureArea
+    case recordArea
     case openHistory
     case clearStack
     case openSettings
@@ -22,6 +23,13 @@ struct SniprCommand: Identifiable, Equatable, Sendable {
             subtitle: "Select a screen region",
             systemImage: "selection.pin.in.out",
             shortcut: "⌘⇧4"
+        ),
+        .init(
+            id: .recordArea,
+            title: "Record Area",
+            subtitle: "Record a selected screen region",
+            systemImage: "record.circle",
+            shortcut: "⌘⇧5"
         ),
         .init(
             id: .openHistory,

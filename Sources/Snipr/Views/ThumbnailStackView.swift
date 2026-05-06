@@ -83,7 +83,7 @@ private struct ThumbnailView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let image = NSImage(contentsOf: item.fileURL) {
+            if item.mediaType == .image, let image = NSImage(contentsOf: item.fileURL) {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFill()
@@ -93,11 +93,15 @@ private struct ThumbnailView: View {
                 Rectangle()
                     .fill(.secondary.opacity(0.2))
                     .frame(width: 188, height: 106)
-                    .overlay(Image(systemName: "exclamationmark.triangle"))
+                    .overlay(
+                        Image(systemName: item.mediaType == .video ? "play.fill" : "exclamationmark.triangle")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.74))
+                    )
             }
 
             HStack {
-                Text(item.dimensionsText)
+                Text(item.detailText)
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.white.opacity(0.68))
 
@@ -114,7 +118,7 @@ private struct ThumbnailView: View {
             let provider = NSItemProvider()
             provider.suggestedName = item.filename
             provider.registerFileRepresentation(
-                forTypeIdentifier: UTType.png.identifier,
+                forTypeIdentifier: item.mediaType == .image ? UTType.png.identifier : UTType.quickTimeMovie.identifier,
                 fileOptions: [.openInPlace],
                 visibility: .all
             ) { completion in

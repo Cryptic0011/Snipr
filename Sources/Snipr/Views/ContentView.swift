@@ -182,6 +182,10 @@ private struct HeroPane: View {
                     coordinator.startCaptureArea()
                 }
 
+                ActionButton(title: "Record Area", systemImage: "record.circle") {
+                    coordinator.startScreenRecordingArea()
+                }
+
                 ActionButton(title: "Open Palette", systemImage: "command") {
                     coordinator.showCommandPalette()
                 }
@@ -473,7 +477,7 @@ private struct CaptureHistoryRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            if let image = NSImage(contentsOf: item.fileURL) {
+            if item.mediaType == .image, let image = NSImage(contentsOf: item.fileURL) {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFill()
@@ -484,7 +488,7 @@ private struct CaptureHistoryRow: View {
                 RoundedRectangle(cornerRadius: 5)
                     .fill(.white.opacity(0.08))
                     .frame(width: 58, height: 38)
-                    .overlay(Image(systemName: "photo").foregroundStyle(.secondary))
+                    .overlay(Image(systemName: item.mediaType == .video ? "play.fill" : "photo").foregroundStyle(.secondary))
             }
 
             VStack(alignment: .leading, spacing: 3) {
@@ -492,7 +496,7 @@ private struct CaptureHistoryRow: View {
                     .font(.system(size: 13, weight: .bold))
                     .lineLimit(1)
 
-                Text("\(item.dimensionsText) • \(item.createdAt.formatted(date: .omitted, time: .shortened))")
+                Text("\(item.detailText) • \(item.createdAt.formatted(date: .omitted, time: .shortened))")
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.46))
             }
@@ -743,7 +747,7 @@ struct CaptureContextMenu: View {
             coordinator.openPreview(for: item)
         }
 
-        Button("Copy Image") {
+        Button(item.mediaType == .image ? "Copy Image" : "Copy Movie") {
             coordinator.copy(item)
         }
 

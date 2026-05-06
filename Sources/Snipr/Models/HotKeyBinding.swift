@@ -71,7 +71,7 @@ enum SniprHotKeyAction: String, CaseIterable, Codable, Identifiable, Sendable {
     }
 
     var isAvailable: Bool {
-        self != .screenRecord
+        true
     }
 }
 
@@ -95,7 +95,7 @@ enum HotKeyDefaults {
     static let bindings: [SniprHotKeyAction: HotKeyBinding] = [
         .openApp: .init(keyCode: UInt32(kVK_ANSI_S), modifiers: hotKeyModifiers(command: true, option: true), isEnabled: true),
         .captureArea: .init(keyCode: UInt32(kVK_ANSI_4), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: true),
-        .screenRecord: .init(keyCode: UInt32(kVK_ANSI_5), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: false),
+        .screenRecord: .init(keyCode: UInt32(kVK_ANSI_5), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: true),
         .commandPalette: .init(keyCode: UInt32(kVK_Space), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: true),
         .hideStack: .init(keyCode: UInt32(kVK_Escape), modifiers: hotKeyModifiers(command: true, option: true), isEnabled: true),
         .showStack: .init(keyCode: UInt32(kVK_ANSI_S), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: true),

@@ -74,6 +74,25 @@ final class CaptureStoreTests: XCTestCase {
         XCTAssertTrue(CaptureStore(rootDirectory: tempRoot).items.isEmpty)
     }
 
+    func testAddRecordingPersistsVideoMetadata() throws {
+        let store = CaptureStore(rootDirectory: tempRoot)
+        let recordingURL = try store.nextRecordingURL()
+        try Data([0x00, 0x01, 0x02]).write(to: recordingURL)
+
+        let item = try store.addRecording(
+            fileURL: recordingURL,
+            pixelSize: CGSize(width: 1920, height: 1080),
+            displayID: 7,
+            duration: 4.2
+        )
+
+        XCTAssertEqual(item.mediaType, .video)
+        XCTAssertEqual(item.sourceType, .recording)
+        XCTAssertEqual(item.duration, 4.2)
+        XCTAssertTrue(item.filename.hasSuffix(".mov"))
+        XCTAssertEqual(CaptureStore(rootDirectory: tempRoot).items.first?.mediaType, .video)
+    }
+
     private func samplePNGData() -> Data {
         Data([
             0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,

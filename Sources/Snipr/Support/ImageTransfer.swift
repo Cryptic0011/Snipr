@@ -1,13 +1,21 @@
 import AppKit
+import UniformTypeIdentifiers
 
 enum ImageTransfer {
     @MainActor
-    static func copyImage(at url: URL) {
-        guard let image = NSImage(contentsOf: url) else {
-            return
-        }
+    static func copy(_ item: CaptureItem) {
+        switch item.mediaType {
+        case .image:
+            guard let image = NSImage(contentsOf: item.fileURL) else {
+                return
+            }
 
-        copyImage(image)
+            copyImage(image)
+        case .video:
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.writeObjects([item.fileURL as NSURL])
+        }
     }
 
     @MainActor
@@ -18,9 +26,9 @@ enum ImageTransfer {
     }
 
     @MainActor
-    static func saveImageAs(_ item: CaptureItem) {
+    static func saveAs(_ item: CaptureItem) {
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.png]
+        panel.allowedContentTypes = item.mediaType == .image ? [.png] : [.quickTimeMovie]
         panel.canCreateDirectories = true
         panel.nameFieldStringValue = item.filename
 

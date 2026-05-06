@@ -22,6 +22,11 @@ struct SniprApp: App {
                 }
                 .keyboardShortcut("4", modifiers: [.command, .shift])
 
+                Button("Record Screen Area") {
+                    model.coordinator.startScreenRecordingArea()
+                }
+                .keyboardShortcut("5", modifiers: [.command, .shift])
+
                 Button("Open Command Palette") {
                     model.coordinator.showCommandPalette()
                 }
@@ -72,6 +77,7 @@ final class SniprAppDelegate: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Capture Area", action: #selector(captureArea), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Record Screen Area", action: #selector(recordScreenArea), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Command Palette", action: #selector(openPalette), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Open History", action: #selector(openHistory), keyEquivalent: ""))
         menu.addItem(.separator())
@@ -86,6 +92,10 @@ final class SniprAppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func captureArea() {
         model?.coordinator.startCaptureArea()
+    }
+
+    @objc private func recordScreenArea() {
+        model?.coordinator.startScreenRecordingArea()
     }
 
     @objc private func openPalette() {

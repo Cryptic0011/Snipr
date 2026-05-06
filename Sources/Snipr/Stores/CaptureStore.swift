@@ -7,6 +7,7 @@ final class CaptureStore {
 
     let rootDirectory: URL
     private let imagesDirectory: URL
+    private let recordingsDirectory: URL
     private let indexURL: URL
     private let fileManager: FileManager
 
@@ -16,6 +17,7 @@ final class CaptureStore {
     ) {
         self.rootDirectory = rootDirectory
         self.imagesDirectory = rootDirectory.appending(path: "Images", directoryHint: .isDirectory)
+        self.recordingsDirectory = rootDirectory.appending(path: "Recordings", directoryHint: .isDirectory)
         self.indexURL = rootDirectory.appending(path: "captures.json")
         self.fileManager = fileManager
         load()
@@ -40,7 +42,40 @@ final class CaptureStore {
             pixelWidth: Int(pixelSize.width.rounded()),
             pixelHeight: Int(pixelSize.height.rounded()),
             displayID: displayID,
-            sourceType: .area
+            sourceType: .area,
+            mediaType: .image,
+            duration: nil
+        )
+
+        items.insert(item, at: 0)
+        try persist()
+        return item
+    }
+
+    func nextRecordingURL() throws -> URL {
+        try ensureDirectoriesExist()
+        return recordingsDirectory.appending(path: "\(UUID().uuidString).mov")
+    }
+
+    @discardableResult
+    func addRecording(
+        fileURL: URL,
+        pixelSize: CGSize,
+        displayID: UInt32?,
+        duration: TimeInterval
+    ) throws -> CaptureItem {
+        try ensureDirectoriesExist()
+
+        let item = CaptureItem(
+            id: UUID(),
+            fileURL: fileURL,
+            createdAt: Date(),
+            pixelWidth: Int(pixelSize.width.rounded()),
+            pixelHeight: Int(pixelSize.height.rounded()),
+            displayID: displayID,
+            sourceType: .recording,
+            mediaType: .video,
+            duration: duration
         )
 
         items.insert(item, at: 0)
@@ -108,6 +143,7 @@ final class CaptureStore {
 
     private func ensureDirectoriesExist() throws {
         try fileManager.createDirectory(at: imagesDirectory, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: recordingsDirectory, withIntermediateDirectories: true)
     }
 }
 
