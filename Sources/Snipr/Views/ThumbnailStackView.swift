@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ThumbnailStackView: View {
     let store: CaptureStore
@@ -20,6 +21,10 @@ struct ThumbnailStackView: View {
                     .padding(.vertical, 3)
                     .background(.white.opacity(0.08), in: Capsule())
             }
+
+            Text("Drag a capture out or double-click to annotate")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.44))
 
             ScrollView {
                 LazyVStack(spacing: 10) {
@@ -69,6 +74,19 @@ private struct ThumbnailView: View {
             }
             .padding(.horizontal, 7)
             .padding(.bottom, 7)
+        }
+        .onDrag {
+            let provider = NSItemProvider()
+            provider.suggestedName = item.filename
+            provider.registerFileRepresentation(
+                forTypeIdentifier: UTType.png.identifier,
+                fileOptions: [.openInPlace],
+                visibility: .all
+            ) { completion in
+                completion(item.fileURL, true, nil)
+                return nil
+            }
+            return provider
         }
         .background(Color(red: 0.08, green: 0.08, blue: 0.09).opacity(0.96), in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.14)))

@@ -4,63 +4,333 @@ struct PreviewWindowView: View {
     let item: CaptureItem
     let coordinator: WindowCoordinator
 
+    @State private var selectedTool: AnnotationTool = .arrow
+    @State private var selectedInk: AnnotationInk = .red
+    @State private var lineWidth: CGFloat = 5
+    @State private var annotations: [AnnotationLayer] = []
+    @State private var draftAnnotation: AnnotationLayer?
+
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Text(item.filename)
-                    .font(.headline)
-                    .lineLimit(1)
-
-                Spacer()
-
-                Button {
-                    coordinator.copy(item)
-                } label: {
-                    Label("Copy", systemImage: "doc.on.doc")
-                }
-
-                Button {
-                    coordinator.saveAs(item)
-                } label: {
-                    Label("Save As", systemImage: "square.and.arrow.down")
-                }
-
-                Button {
-                    coordinator.reveal(item)
-                } label: {
-                    Label("Reveal", systemImage: "finder")
-                }
-
-                Button(role: .destructive) {
-                    coordinator.delete(item)
-                } label: {
-                    Label("Delete", systemImage: "trash")
-                }
-            }
-            .padding(12)
-            .background(.bar)
+            toolbar
 
             GeometryReader { proxy in
                 if let image = NSImage(contentsOf: item.fileURL) {
-                    Image(nsImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                        .background(Color.black.opacity(0.84))
+                    AnnotationCanvasView(
+                        image: image,
+                        containerSize: proxy.size,
+                        selectedTool: selectedTool,
+                        selectedInk: selectedInk,
+                        lineWidth: lineWidth,
+                        annotations: annotations,
+                        draftAnnotation: draftAnnotation,
+                        onDraftChanged: { draftAnnotation = $0 },
+                        onCommit: { annotation in
+                            annotations.append(annotation)
+                            draftAnnotation = nil
+                        },
+                        onCancelDraft: {
+                            draftAnnotation = nil
+                        }
+                    )
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .background(Color.black.opacity(0.88))
                 } else {
                     ContentUnavailableView("Image Missing", systemImage: "photo.badge.exclamationmark")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
 
-            HStack {
-                Text(item.createdAt.formatted(date: .abbreviated, time: .shortened))
-                Spacer()
-                Text(item.dimensionsText)
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .padding(10)
+            footer
         }
+    }
+
+    private var toolbar: some View {
+        HStack(spacing: 10) {
+            Text(item.filename)
+                .font(.headline)
+                .lineLimit(1)
+                .frame(maxWidth: 190, alignment: .leading)
+
+            Divider()
+                .frame(height: 22)
+
+            Picker("Tool", selection: $selectedTool) {
+                ForEach(AnnotationTool.allCases) { tool in
+                    Label(tool.title, systemImage: tool.systemImage)
+                        .tag(tool)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 300)
+
+            HStack(spacing: 6) {
+                ForEach(AnnotationInk.allCases) { ink in
+                    Button {
+                        selectedInk = ink
+                    } label: {
+                        Circle()
+                            .fill(ink.color)
+                            .frame(width: 16, height: 16)
+                            .overlay(Circle().stroke(.white.opacity(selectedInk == ink ? 0.95 : 0.22), lineWidth: selectedInk == ink ? 3 : 1))
+                    }
+                    .buttonStyle(.plain)
+                    .help(ink.rawValue.capitalized)
+                }
+            }
+
+            Slider(value: $lineWidth, in: 2...12, step: 1)
+                .frame(width: 82)
+                .help("Line width")
+
+            Spacer()
+
+            Button {
+                undo()
+            } label: {
+                Image(systemName: "arrow.uturn.backward")
+            }
+            .disabled(annotations.isEmpty)
+            .help("Undo")
+
+            Button {
+                annotations.removeAll()
+            } label: {
+                Image(systemName: "xmark.circle")
+            }
+            .disabled(annotations.isEmpty)
+            .help("Clear annotations")
+
+            Button {
+                copyAnnotatedImage()
+            } label: {
+                Image(systemName: "doc.on.doc")
+            }
+            .help("Copy annotated image")
+
+            Button {
+                saveAnnotatedImage()
+            } label: {
+                Image(systemName: "square.and.arrow.down")
+            }
+            .help("Save annotated image")
+
+            Menu {
+                Button("Reveal Original") {
+                    coordinator.reveal(item)
+                }
+
+                Button("Copy Original") {
+                    coordinator.copy(item)
+                }
+
+                Button(role: .destructive) {
+                    coordinator.delete(item)
+                } label: {
+                    Text("Delete Original")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton)
+        }
+        .padding(12)
+        .background(.bar)
+    }
+
+    private var footer: some View {
+        HStack {
+            Text(item.createdAt.formatted(date: .abbreviated, time: .shortened))
+            Spacer()
+            Text(annotationStatus)
+            Spacer()
+            Text(item.dimensionsText)
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(10)
+    }
+
+    private var annotationStatus: String {
+        if annotations.isEmpty {
+            "Draw arrows, circles, boxes, and blur regions"
+        } else {
+            "\(annotations.count) annotation\(annotations.count == 1 ? "" : "s")"
+        }
+    }
+
+    private func undo() {
+        _ = annotations.popLast()
+    }
+
+    private func copyAnnotatedImage() {
+        guard let image = AnnotationRenderer.renderImage(baseURL: item.fileURL, annotations: annotations) else {
+            return
+        }
+
+        ImageTransfer.copyImage(image)
+    }
+
+    private func saveAnnotatedImage() {
+        guard let data = AnnotationRenderer.pngData(baseURL: item.fileURL, annotations: annotations) else {
+            return
+        }
+
+        let suggestedName = item.fileURL.deletingPathExtension().lastPathComponent + "-annotated.png"
+        ImageTransfer.savePNGData(data, suggestedFilename: suggestedName)
+    }
+}
+
+private struct AnnotationCanvasView: View {
+    let image: NSImage
+    let containerSize: CGSize
+    let selectedTool: AnnotationTool
+    let selectedInk: AnnotationInk
+    let lineWidth: CGFloat
+    let annotations: [AnnotationLayer]
+    let draftAnnotation: AnnotationLayer?
+    let onDraftChanged: (AnnotationLayer?) -> Void
+    let onCommit: (AnnotationLayer) -> Void
+    let onCancelDraft: () -> Void
+
+    var body: some View {
+        let imageSize = imagePixelSize
+        let displayRect = ImagePresentationGeometry.aspectFitRect(
+            imageSize: imageSize,
+            containerSize: containerSize
+        )
+
+        ZStack {
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(width: containerSize.width, height: containerSize.height)
+
+            Canvas { context, _ in
+                for annotation in annotations {
+                    draw(annotation, in: &context, imageSize: imageSize, displayRect: displayRect, isDraft: false)
+                }
+
+                if let draftAnnotation {
+                    draw(draftAnnotation, in: &context, imageSize: imageSize, displayRect: displayRect, isDraft: true)
+                }
+            }
+            .frame(width: containerSize.width, height: containerSize.height)
+            .contentShape(Rectangle())
+            .gesture(drawingGesture(imageSize: imageSize, displayRect: displayRect))
+        }
+    }
+
+    private var imagePixelSize: CGSize {
+        if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            return CGSize(width: cgImage.width, height: cgImage.height)
+        }
+
+        return image.size
+    }
+
+    private func drawingGesture(imageSize: CGSize, displayRect: CGRect) -> some Gesture {
+        DragGesture(minimumDistance: 2)
+            .onChanged { value in
+                guard let start = ImagePresentationGeometry.imagePoint(
+                    from: value.startLocation,
+                    imageSize: imageSize,
+                    displayRect: displayRect
+                ), let end = ImagePresentationGeometry.imagePoint(
+                    from: value.location,
+                    imageSize: imageSize,
+                    displayRect: displayRect
+                ) else {
+                    onCancelDraft()
+                    return
+                }
+
+                onDraftChanged(
+                    AnnotationLayer(
+                        tool: selectedTool,
+                        start: start,
+                        end: end,
+                        ink: selectedTool == .blur ? .white : selectedInk,
+                        lineWidth: lineWidth
+                    )
+                )
+            }
+            .onEnded { _ in
+                guard let draftAnnotation, draftAnnotation.isMeaningful else {
+                    onCancelDraft()
+                    return
+                }
+
+                onCommit(draftAnnotation)
+            }
+    }
+
+    private func draw(
+        _ annotation: AnnotationLayer,
+        in context: inout GraphicsContext,
+        imageSize: CGSize,
+        displayRect: CGRect,
+        isDraft: Bool
+    ) {
+        let start = ImagePresentationGeometry.viewPoint(
+            from: annotation.start,
+            imageSize: imageSize,
+            displayRect: displayRect
+        )
+        let end = ImagePresentationGeometry.viewPoint(
+            from: annotation.end,
+            imageSize: imageSize,
+            displayRect: displayRect
+        )
+        let bounds = ImagePresentationGeometry.viewRect(
+            from: annotation.bounds,
+            imageSize: imageSize,
+            displayRect: displayRect
+        )
+        let opacity = isDraft ? 0.74 : 1.0
+        let stroke = StrokeStyle(lineWidth: annotation.lineWidth, lineCap: .round, lineJoin: .round)
+
+        switch annotation.tool {
+        case .arrow:
+            var path = Path()
+            path.move(to: start)
+            path.addLine(to: end)
+            context.stroke(path, with: .color(annotation.ink.color.opacity(opacity)), style: stroke)
+            drawArrowHead(from: start, to: end, color: annotation.ink.color.opacity(opacity), lineWidth: annotation.lineWidth, in: &context)
+        case .rectangle:
+            context.stroke(Path(bounds), with: .color(annotation.ink.color.opacity(opacity)), style: stroke)
+        case .ellipse:
+            context.stroke(Path(ellipseIn: bounds), with: .color(annotation.ink.color.opacity(opacity)), style: stroke)
+        case .blur:
+            let blurFill = Color.white.opacity(isDraft ? 0.10 : 0.14)
+            context.fill(Path(roundedRect: bounds, cornerRadius: 8), with: .color(blurFill))
+            context.stroke(Path(roundedRect: bounds, cornerRadius: 8), with: .color(.white.opacity(0.56)), style: StrokeStyle(lineWidth: 2, dash: [6, 5]))
+        }
+    }
+
+    private func drawArrowHead(
+        from start: CGPoint,
+        to end: CGPoint,
+        color: Color,
+        lineWidth: CGFloat,
+        in context: inout GraphicsContext
+    ) {
+        let angle = atan2(end.y - start.y, end.x - start.x)
+        let length: CGFloat = 20
+        let spread: CGFloat = .pi / 7
+        let first = CGPoint(
+            x: end.x - length * cos(angle - spread),
+            y: end.y - length * sin(angle - spread)
+        )
+        let second = CGPoint(
+            x: end.x - length * cos(angle + spread),
+            y: end.y - length * sin(angle + spread)
+        )
+
+        var path = Path()
+        path.move(to: first)
+        path.addLine(to: end)
+        path.addLine(to: second)
+        context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
     }
 }
