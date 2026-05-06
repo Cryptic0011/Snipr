@@ -1,18 +1,15 @@
 import Carbon
 import Foundation
 
-enum SniprHotKey {
-    case commandPalette
-    case captureArea
-}
-
 @MainActor
 final class HotKeyService {
-    private let handler: (SniprHotKey) -> Void
+    private let handler: (SniprHotKeyAction) -> Void
+    private(set) var registrationFailures: [SniprHotKeyAction: OSStatus] = [:]
     private var refs: [EventHotKeyRef?] = []
     private var eventHandler: EventHandlerRef?
+    private var actionByHotKeyID: [UInt32: SniprHotKeyAction] = [:]
 
-    init(handler: @escaping (SniprHotKey) -> Void) {
+    init(handler: @escaping (SniprHotKeyAction) -> Void) {
         self.handler = handler
     }
 
@@ -29,12 +26,22 @@ final class HotKeyService {
 
         refs.removeAll()
         eventHandler = nil
+        actionByHotKeyID.removeAll()
+        registrationFailures.removeAll()
     }
 
-    func registerDefaults() {
+    func register(_ bindings: [SniprHotKeyAction: HotKeyBinding]) {
+        invalidate()
         installEventHandlerIfNeeded()
-        register(keyCode: UInt32(kVK_Space), modifiers: cmdKey | shiftKey, id: 1)
-        register(keyCode: UInt32(kVK_ANSI_4), modifiers: cmdKey | shiftKey, id: 2)
+
+        for action in SniprHotKeyAction.allCases where action.isAvailable {
+            let binding = bindings[action] ?? HotKeyDefaults.bindings[action]
+            guard let binding, binding.isEnabled else {
+                continue
+            }
+
+            register(keyCode: binding.keyCode, modifiers: binding.modifiers, id: UInt32(action.registrationID), action: action)
+        }
     }
 
     private func installEventHandlerIfNeeded() {
@@ -77,25 +84,44 @@ final class HotKeyService {
         )
     }
 
-    private func register(keyCode: UInt32, modifiers: Int, id: UInt32) {
+    private func register(keyCode: UInt32, modifiers: UInt32, id: UInt32, action: SniprHotKeyAction) {
         var hotKeyRef: EventHotKeyRef?
         let signature = OSType(UInt32(bigEndian: "SNPR".fourCharCode))
         let hotKeyID = EventHotKeyID(signature: signature, id: id)
-        let status = RegisterEventHotKey(keyCode, UInt32(modifiers), hotKeyID, GetApplicationEventTarget(), 0, &hotKeyRef)
+        let status = RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetApplicationEventTarget(), 0, &hotKeyRef)
 
         if status == noErr {
             refs.append(hotKeyRef)
+            actionByHotKeyID[id] = action
+        } else {
+            registrationFailures[action] = status
         }
     }
 
     private func handleHotKey(id: UInt32) {
-        switch id {
-        case 1:
-            handler(.commandPalette)
-        case 2:
-            handler(.captureArea)
-        default:
-            break
+        if let action = actionByHotKeyID[id] {
+            handler(action)
+        }
+    }
+}
+
+private extension SniprHotKeyAction {
+    var registrationID: Int {
+        switch self {
+        case .openApp:
+            1
+        case .captureArea:
+            2
+        case .screenRecord:
+            3
+        case .commandPalette:
+            4
+        case .hideStack:
+            5
+        case .showStack:
+            6
+        case .clearStack:
+            7
         }
     }
 }

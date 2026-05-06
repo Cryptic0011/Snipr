@@ -10,6 +10,7 @@ final class SniprPreferences {
         static let stackAutoHideDelay = "stackAutoHideDelay"
         static let pauseStackAutoHideOnHover = "pauseStackAutoHideOnHover"
         static let hideStackAfterPreview = "hideStackAfterPreview"
+        static let hotKeyBindings = "hotKeyBindings"
     }
 
     var showStackAfterCapture: Bool {
@@ -32,6 +33,10 @@ final class SniprPreferences {
         didSet { defaults.set(hideStackAfterPreview, forKey: Keys.hideStackAfterPreview) }
     }
 
+    var hotKeyBindings: [SniprHotKeyAction: HotKeyBinding] {
+        didSet { saveHotKeyBindings() }
+    }
+
     @ObservationIgnored
     private let defaults: UserDefaults
 
@@ -42,6 +47,7 @@ final class SniprPreferences {
         stackAutoHideDelay = defaults.object(forKey: Keys.stackAutoHideDelay) as? Double ?? 8
         pauseStackAutoHideOnHover = defaults.object(forKey: Keys.pauseStackAutoHideOnHover) as? Bool ?? true
         hideStackAfterPreview = defaults.object(forKey: Keys.hideStackAfterPreview) as? Bool ?? true
+        hotKeyBindings = Self.loadHotKeyBindings(from: defaults)
     }
 
     func resetStackDefaults() {
@@ -50,5 +56,47 @@ final class SniprPreferences {
         stackAutoHideDelay = 8
         pauseStackAutoHideOnHover = true
         hideStackAfterPreview = true
+    }
+
+    func binding(for action: SniprHotKeyAction) -> HotKeyBinding {
+        hotKeyBindings[action] ?? HotKeyDefaults.bindings[action] ?? HotKeyBinding(keyCode: 0, modifiers: 0, isEnabled: false)
+    }
+
+    func setHotKeyBinding(_ binding: HotKeyBinding, for action: SniprHotKeyAction) {
+        hotKeyBindings[action] = binding
+    }
+
+    func resetHotKeyDefaults() {
+        hotKeyBindings = HotKeyDefaults.bindings
+    }
+
+    func conflictingAction(for action: SniprHotKeyAction, binding: HotKeyBinding) -> SniprHotKeyAction? {
+        guard binding.isEnabled else {
+            return nil
+        }
+
+        return hotKeyBindings.first { candidateAction, candidateBinding in
+            candidateAction != action &&
+                candidateBinding.isEnabled &&
+                candidateBinding.keyCode == binding.keyCode &&
+                candidateBinding.modifiers == binding.modifiers
+        }?.key
+    }
+
+    private func saveHotKeyBindings() {
+        guard let data = try? JSONEncoder().encode(hotKeyBindings) else {
+            return
+        }
+
+        defaults.set(data, forKey: Keys.hotKeyBindings)
+    }
+
+    private static func loadHotKeyBindings(from defaults: UserDefaults) -> [SniprHotKeyAction: HotKeyBinding] {
+        guard let data = defaults.data(forKey: Keys.hotKeyBindings),
+              let stored = try? JSONDecoder().decode([SniprHotKeyAction: HotKeyBinding].self, from: data) else {
+            return HotKeyDefaults.bindings
+        }
+
+        return HotKeyDefaults.bindings.merging(stored) { _, stored in stored }
     }
 }

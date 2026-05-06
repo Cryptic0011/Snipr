@@ -343,6 +343,12 @@ private struct StoragePanel: View {
                     .foregroundStyle(.white.opacity(0.54))
 
                 VStack(spacing: 0) {
+                    StorageRow(title: "More Settings", value: "Open full preferences and hotkeys", systemImage: "gearshape", actionTitle: "Open") {
+                        model.coordinator.openSettingsWindow()
+                    }
+
+                    DividerLine()
+
                     StorageRow(title: "Capture Folder", value: model.captureStore.rootDirectory.path, systemImage: "folder", actionTitle: "Reveal") {
                         NSWorkspace.shared.activateFileViewerSelecting([model.captureStore.rootDirectory])
                     }

@@ -70,11 +70,30 @@ final class WindowCoordinator {
         case .clearStack:
             clearStack()
         case .openSettings:
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-            NSApp.activate(ignoringOtherApps: true)
+            openSettingsWindow()
         case .quit:
             NSApp.terminate(nil)
         }
+    }
+
+    func openMainWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        if let window = NSApp.windows.first(where: { $0.title == "Snipr" }) ?? NSApp.windows.first(where: { $0.canBecomeMain }) {
+            window.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    func openSettingsWindow() {
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func showScreenRecordingComingSoon() {
+        let alert = NSAlert()
+        alert.messageText = "Screen Recording"
+        alert.informativeText = "The hotkey is reserved. The recording workflow is not built yet."
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     func startCaptureArea() {
