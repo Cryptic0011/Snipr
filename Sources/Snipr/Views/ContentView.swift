@@ -75,7 +75,7 @@ private enum DashboardTab: String, CaseIterable, Identifiable {
         case .permissions:
             "Permissions"
         case .storage:
-            "Storage"
+            "Settings"
         }
     }
 
@@ -88,7 +88,7 @@ private enum DashboardTab: String, CaseIterable, Identifiable {
         case .permissions:
             "lock.shield"
         case .storage:
-            "folder"
+            "gearshape"
         }
     }
 
@@ -335,10 +335,10 @@ private struct StoragePanel: View {
     var body: some View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 22) {
-                Text("Storage")
+                Text("Settings")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
 
-                Text("Snipr saves captures locally as PNG files and keeps a lightweight metadata index beside them.")
+                Text("Tune stack behavior and manage the local capture folder.")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.54))
 
