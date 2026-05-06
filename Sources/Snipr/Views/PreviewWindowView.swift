@@ -206,6 +206,26 @@ private struct AnnotationCanvasView: View {
                 .scaledToFit()
                 .frame(width: containerSize.width, height: containerSize.height)
 
+            ForEach(annotations.filter { $0.tool == .blur }) { annotation in
+                BlurPreviewLayer(
+                    image: image,
+                    containerSize: containerSize,
+                    imageSize: imageSize,
+                    displayRect: displayRect,
+                    annotation: annotation
+                )
+            }
+
+            if let draftAnnotation, draftAnnotation.tool == .blur {
+                BlurPreviewLayer(
+                    image: image,
+                    containerSize: containerSize,
+                    imageSize: imageSize,
+                    displayRect: displayRect,
+                    annotation: draftAnnotation
+                )
+            }
+
             Canvas { context, _ in
                 for annotation in annotations {
                     draw(annotation, in: &context, imageSize: imageSize, displayRect: displayRect, isDraft: false)
@@ -302,7 +322,7 @@ private struct AnnotationCanvasView: View {
         case .ellipse:
             context.stroke(Path(ellipseIn: bounds), with: .color(annotation.ink.color.opacity(opacity)), style: stroke)
         case .blur:
-            let blurFill = Color.white.opacity(isDraft ? 0.10 : 0.14)
+            let blurFill = Color.white.opacity(isDraft ? 0.04 : 0.06)
             context.fill(Path(roundedRect: bounds, cornerRadius: 8), with: .color(blurFill))
             context.stroke(Path(roundedRect: bounds, cornerRadius: 8), with: .color(.white.opacity(0.56)), style: StrokeStyle(lineWidth: 2, dash: [6, 5]))
         }
@@ -332,5 +352,35 @@ private struct AnnotationCanvasView: View {
         path.addLine(to: end)
         path.addLine(to: second)
         context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+    }
+}
+
+private struct BlurPreviewLayer: View {
+    let image: NSImage
+    let containerSize: CGSize
+    let imageSize: CGSize
+    let displayRect: CGRect
+    let annotation: AnnotationLayer
+
+    var body: some View {
+        let rect = ImagePresentationGeometry.viewRect(
+            from: annotation.bounds,
+            imageSize: imageSize,
+            displayRect: displayRect
+        )
+
+        Image(nsImage: image)
+            .resizable()
+            .scaledToFit()
+            .frame(width: containerSize.width, height: containerSize.height)
+            .blur(radius: 12)
+            .mask {
+                Rectangle()
+                    .fill(.white)
+                    .frame(width: rect.width, height: rect.height)
+                    .position(x: rect.midX, y: rect.midY)
+                    .frame(width: containerSize.width, height: containerSize.height, alignment: .topLeading)
+            }
+            .allowsHitTesting(false)
     }
 }
