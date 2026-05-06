@@ -398,11 +398,12 @@ final class WindowCoordinator {
     private func showRecordingRegionFrame(screen: NSScreen, rect: CGRect) {
         closeRecordingRegionFrame()
 
+        let padding: CGFloat = 8
         let frameRect = NSRect(
-            x: screen.frame.minX + rect.minX,
-            y: screen.frame.maxY - rect.maxY,
-            width: rect.width,
-            height: rect.height
+            x: screen.frame.minX + rect.minX - padding,
+            y: screen.frame.maxY - rect.maxY - padding,
+            width: rect.width + padding * 2,
+            height: rect.height + padding * 2
         )
         let panel = NSPanel(
             contentRect: frameRect,
@@ -410,13 +411,13 @@ final class WindowCoordinator {
             backing: .buffered,
             defer: false
         )
-        panel.level = .floating
+        panel.level = .screenSaver
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = false
         panel.ignoresMouseEvents = true
-        panel.contentView = NSHostingView(rootView: RecordingRegionFrameView(size: rect.size))
+        panel.contentView = NSHostingView(rootView: RecordingRegionFrameView(size: rect.size, padding: padding))
         recordingRegionFramePanel = panel
         panel.orderFrontRegardless()
     }

@@ -83,22 +83,11 @@ private struct ThumbnailView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if item.mediaType == .image, let image = NSImage(contentsOf: item.fileURL) {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 188, height: 106)
-                    .clipped()
-            } else {
-                Rectangle()
-                    .fill(.secondary.opacity(0.2))
-                    .frame(width: 188, height: 106)
-                    .overlay(
-                        Image(systemName: item.mediaType == .video ? "play.fill" : "exclamationmark.triangle")
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.74))
-                    )
-            }
+            MediaThumbnailView(
+                item: item,
+                size: CGSize(width: 188, height: 106),
+                cornerRadius: 0
+            )
 
             HStack {
                 Text(item.detailText)

@@ -477,19 +477,11 @@ private struct CaptureHistoryRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            if item.mediaType == .image, let image = NSImage(contentsOf: item.fileURL) {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 58, height: 38)
-                    .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: 5))
-            } else {
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(.white.opacity(0.08))
-                    .frame(width: 58, height: 38)
-                    .overlay(Image(systemName: item.mediaType == .video ? "play.fill" : "photo").foregroundStyle(.secondary))
-            }
+            MediaThumbnailView(
+                item: item,
+                size: CGSize(width: 58, height: 38),
+                cornerRadius: 5
+            )
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.filename)
