@@ -17,6 +17,7 @@ final class WindowCoordinator {
     private var previewWindows: [UUID: NSWindow] = [:]
     private var overlayWindows: [NSWindow] = []
     private var recordingHUDPanel: NSPanel?
+    private var recordingRegionFramePanel: NSPanel?
     private var activeRecordingDisplayID: CGDirectDisplayID?
 
     init(captureStore: CaptureStore, preferences: SniprPreferences) {
@@ -386,11 +387,38 @@ final class WindowCoordinator {
                 let destinationURL = try self.captureStore.nextRecordingURL()
                 try self.recordingService.start(displayID: displayID, rectInDisplayPoints: rect, screen: screen, destinationURL: destinationURL)
                 self.activeRecordingDisplayID = displayID
+                self.showRecordingRegionFrame(screen: screen, rect: rect)
                 self.showRecordingHUD()
             } catch {
                 NSAlert(error: error).runModal()
             }
         }
+    }
+
+    private func showRecordingRegionFrame(screen: NSScreen, rect: CGRect) {
+        closeRecordingRegionFrame()
+
+        let frameRect = NSRect(
+            x: screen.frame.minX + rect.minX,
+            y: screen.frame.maxY - rect.maxY,
+            width: rect.width,
+            height: rect.height
+        )
+        let panel = NSPanel(
+            contentRect: frameRect,
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.level = .floating
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
+        panel.hasShadow = false
+        panel.ignoresMouseEvents = true
+        panel.contentView = NSHostingView(rootView: RecordingRegionFrameView(size: rect.size))
+        recordingRegionFramePanel = panel
+        panel.orderFrontRegardless()
     }
 
     private func showRecordingHUD() {
@@ -435,6 +463,13 @@ final class WindowCoordinator {
         recordingHUDPanel?.orderOut(nil)
         recordingHUDPanel?.close()
         recordingHUDPanel = nil
+        closeRecordingRegionFrame()
+    }
+
+    private func closeRecordingRegionFrame() {
+        recordingRegionFramePanel?.orderOut(nil)
+        recordingRegionFramePanel?.close()
+        recordingRegionFramePanel = nil
     }
 
     private func closeCaptureOverlays() {
