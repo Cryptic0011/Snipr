@@ -64,8 +64,7 @@ final class SniprAppDelegate: NSObject, NSApplicationDelegate {
     private func installStatusItem(model: SniprAppModel) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
-        if let logoURL = Bundle.module.url(forResource: "SniprLogo", withExtension: "png"),
-           let image = NSImage(contentsOf: logoURL) {
+        if let image = SniprAssets.image(named: "SniprLogoMark") {
             image.size = NSSize(width: 18, height: 18)
             item.button?.image = image
         } else {

@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     let model: SniprAppModel
     @State private var selectedTab: DashboardTab = .overview
+    @State private var permissionRefreshTick = 0
 
     var body: some View {
         ZStack {
@@ -11,7 +12,8 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 HStack(spacing: 42) {
                     HeroPane(
-                        logoImage: logoImage,
+                        logoMarkImage: logoMarkImage,
+                        wordmarkImage: wordmarkImage,
                         capturesCount: model.captureStore.items.count,
                         coordinator: model.coordinator
                     )
@@ -30,15 +32,29 @@ struct ContentView: View {
             }
         }
         .foregroundStyle(.white)
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                permissionRefreshTick += 1
+                _ = permissionRefreshTick
+            }
+        }
     }
 
-    private var logoImage: NSImage {
-        if let url = Bundle.module.url(forResource: "SniprLogo", withExtension: "png"),
-           let image = NSImage(contentsOf: url) {
+    private var logoMarkImage: NSImage {
+        if let image = SniprAssets.image(named: "SniprLogoMark") {
             return image
         }
 
         return NSImage(systemSymbolName: "selection.pin.in.out", accessibilityDescription: "Snipr") ?? NSImage()
+    }
+
+    private var wordmarkImage: NSImage {
+        if let image = SniprAssets.image(named: "SniprWordmark") {
+            return image
+        }
+
+        return NSImage()
     }
 }
 
@@ -121,22 +137,25 @@ private struct RaycastBackdrop: View {
 }
 
 private struct HeroPane: View {
-    let logoImage: NSImage
+    let logoMarkImage: NSImage
+    let wordmarkImage: NSImage
     let capturesCount: Int
     let coordinator: WindowCoordinator
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 18) {
-                Image(nsImage: logoImage)
+                Image(nsImage: logoMarkImage)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 76, height: 76)
+                    .frame(width: 104, height: 104)
                     .shadow(color: .white.opacity(0.16), radius: 16)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Snipr")
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                VStack(alignment: .leading, spacing: 8) {
+                    Image(nsImage: wordmarkImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 126, height: 42, alignment: .leading)
 
                     Text(capturesCount == 0 ? "Local capture utility" : "\(capturesCount) captures stored")
                         .font(.system(size: 13, weight: .semibold))
