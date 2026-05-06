@@ -5,7 +5,7 @@ final class SniprCommandTests: XCTestCase {
     func testAllCommandsMatchMVPOrder() {
         XCTAssertEqual(
             SniprCommand.all.map(\.id),
-            [.captureArea, .recordArea, .openHistory, .clearStack, .openSettings, .quit]
+            [.captureToolbar, .captureArea, .recordArea, .openHistory, .clearStack, .openSettings, .quit]
         )
     }
 
@@ -14,7 +14,8 @@ final class SniprCommandTests: XCTestCase {
     }
 
     func testSearchMatchesTitleAndSubtitleTokens() {
-        XCTAssertEqual(SniprCommand.filtered(by: "capture").map(\.id), [.captureArea])
+        XCTAssertEqual(SniprCommand.filtered(by: "capture").map(\.id), [.captureToolbar, .captureArea])
+        XCTAssertEqual(SniprCommand.filtered(by: "toolbar").map(\.id), [.captureToolbar])
         XCTAssertEqual(SniprCommand.filtered(by: "record").map(\.id), [.recordArea])
         XCTAssertEqual(SniprCommand.filtered(by: "local captures").map(\.id), [.openHistory])
     }

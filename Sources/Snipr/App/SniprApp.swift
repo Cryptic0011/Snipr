@@ -17,6 +17,11 @@ struct SniprApp: App {
         .windowResizability(.contentSize)
         .commands {
             CommandGroup(after: .newItem) {
+                Button("Open Capture Toolbar") {
+                    model.coordinator.showCaptureToolbar()
+                }
+                .keyboardShortcut("5", modifiers: [.command, .shift])
+
                 Button("Capture Area") {
                     model.coordinator.startCaptureArea()
                 }
@@ -25,7 +30,7 @@ struct SniprApp: App {
                 Button("Record Screen Area") {
                     model.coordinator.startScreenRecordingArea()
                 }
-                .keyboardShortcut("5", modifiers: [.command, .shift])
+                .keyboardShortcut("6", modifiers: [.command, .shift])
 
                 Button("Open Command Palette") {
                     model.coordinator.showCommandPalette()
@@ -76,6 +81,7 @@ final class SniprAppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "Open Capture Toolbar", action: #selector(openCaptureToolbar), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Capture Area", action: #selector(captureArea), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Record Screen Area", action: #selector(recordScreenArea), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Command Palette", action: #selector(openPalette), keyEquivalent: ""))
@@ -92,6 +98,10 @@ final class SniprAppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func captureArea() {
         model?.coordinator.startCaptureArea()
+    }
+
+    @objc private func openCaptureToolbar() {
+        model?.coordinator.showCaptureToolbar()
     }
 
     @objc private func recordScreenArea() {

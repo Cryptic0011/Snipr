@@ -112,16 +112,18 @@ private extension SniprHotKeyAction {
             1
         case .captureArea:
             2
-        case .screenRecord:
+        case .captureToolbar:
             3
-        case .commandPalette:
+        case .screenRecord:
             4
-        case .hideStack:
+        case .commandPalette:
             5
-        case .showStack:
+        case .hideStack:
             6
-        case .clearStack:
+        case .showStack:
             7
+        case .clearStack:
+            8
         }
     }
 }

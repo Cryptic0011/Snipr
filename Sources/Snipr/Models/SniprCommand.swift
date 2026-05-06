@@ -3,6 +3,7 @@ import Foundation
 enum SniprCommandID: String, CaseIterable, Codable, Sendable {
     case captureArea
     case recordArea
+    case captureToolbar
     case openHistory
     case clearStack
     case openSettings
@@ -18,6 +19,13 @@ struct SniprCommand: Identifiable, Equatable, Sendable {
 
     static let all: [SniprCommand] = [
         .init(
+            id: .captureToolbar,
+            title: "Open Capture Toolbar",
+            subtitle: "Choose screenshot or recording mode",
+            systemImage: "camera.viewfinder",
+            shortcut: "⌘⇧5"
+        ),
+        .init(
             id: .captureArea,
             title: "Capture Area",
             subtitle: "Select a screen region",
@@ -29,7 +37,7 @@ struct SniprCommand: Identifiable, Equatable, Sendable {
             title: "Record Area",
             subtitle: "Record a selected screen region",
             systemImage: "record.circle",
-            shortcut: "⌘⇧5"
+            shortcut: "⌘⇧6"
         ),
         .init(
             id: .openHistory,

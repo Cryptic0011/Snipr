@@ -10,6 +10,7 @@ final class WindowCoordinator {
     private let captureService = ScreenCaptureService()
     private let recordingService = ScreenRecordingService()
     private var commandPalettePanel: NSPanel?
+    private var captureToolbarPanel: NSPanel?
     private var thumbnailPanel: NSPanel?
     private var thumbnailHideTask: Task<Void, Never>?
     private var isThumbnailStackHovered = false
@@ -64,12 +65,63 @@ final class WindowCoordinator {
         commandPalettePanel = nil
     }
 
+    func showCaptureToolbar() {
+        if let captureToolbarPanel {
+            captureToolbarPanel.orderFrontRegardless()
+            return
+        }
+
+        guard let screen = NSScreen.main else {
+            return
+        }
+
+        let size = NSSize(width: 462, height: 58)
+        let origin = NSPoint(
+            x: screen.visibleFrame.midX - size.width / 2,
+            y: screen.visibleFrame.minY + 34
+        )
+        let panel = NSPanel(
+            contentRect: NSRect(origin: origin, size: size),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.level = .floating
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
+        panel.hasShadow = false
+        panel.contentView = NSHostingView(
+            rootView: CaptureToolbarView(
+                onCancel: { [weak self] in
+                    self?.hideCaptureToolbar()
+                },
+                onOptions: { [weak self] in
+                    self?.openSettingsWindow()
+                },
+                onExecute: { [weak self] mode in
+                    self?.executeCaptureToolbarMode(mode)
+                }
+            )
+        )
+        captureToolbarPanel = panel
+        panel.orderFrontRegardless()
+    }
+
+    func hideCaptureToolbar() {
+        captureToolbarPanel?.orderOut(nil)
+        captureToolbarPanel?.close()
+        captureToolbarPanel = nil
+    }
+
     func execute(_ command: SniprCommand) {
         switch command.id {
         case .captureArea:
             startCaptureArea()
         case .recordArea:
             startScreenRecordingArea()
+        case .captureToolbar:
+            showCaptureToolbar()
         case .openHistory:
             NSApp.activate(ignoringOtherApps: true)
             NSApp.windows.first?.makeKeyAndOrderFront(nil)
@@ -114,6 +166,17 @@ final class WindowCoordinator {
         }
 
         showCaptureOverlays(mode: .screenshot)
+    }
+
+    private func executeCaptureToolbarMode(_ mode: CaptureToolbarMode) {
+        hideCaptureToolbar()
+
+        switch mode {
+        case .screenshotArea:
+            startCaptureArea()
+        case .recordArea:
+            startScreenRecordingArea()
+        }
     }
 
     func showThumbnailStack() {
