@@ -14,15 +14,33 @@ struct ThumbnailStackView: View {
 
                 Spacer()
 
+                Button {
+                    coordinator.setThumbnailStackPinned(!coordinator.isThumbnailStackPinned)
+                } label: {
+                    Image(systemName: coordinator.isThumbnailStackPinned ? "pin.fill" : "pin")
+                        .font(.caption2.weight(.bold))
+                }
+                .buttonStyle(StackIconButtonStyle(isActive: coordinator.isThumbnailStackPinned))
+                .help(coordinator.isThumbnailStackPinned ? "Unpin stack" : "Pin stack")
+
                 Text("\(store.items.count)")
                     .font(.caption2.monospacedDigit().weight(.bold))
                     .foregroundStyle(.white.opacity(0.54))
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(.white.opacity(0.08), in: Capsule())
+
+                Button {
+                    coordinator.hideThumbnailStack()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption2.weight(.bold))
+                }
+                .buttonStyle(StackIconButtonStyle(isActive: false))
+                .help("Hide stack")
             }
 
-            Text("Drag a capture out or double-click to annotate")
+            Text(coordinator.isThumbnailStackPinned ? "Pinned until you close it" : "Drag a capture out or double-click to annotate")
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.44))
 
@@ -39,6 +57,23 @@ struct ThumbnailStackView: View {
         .background(Color(red: 0.055, green: 0.055, blue: 0.065).opacity(0.92), in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.14)))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onHover { isHovered in
+            coordinator.setThumbnailStackHovering(isHovered)
+        }
+    }
+}
+
+private struct StackIconButtonStyle: ButtonStyle {
+    let isActive: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(isActive ? .white : .white.opacity(0.58))
+            .frame(width: 22, height: 22)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isActive ? Color.white.opacity(0.16) : Color.white.opacity(configuration.isPressed ? 0.12 : 0.06))
+            )
     }
 }
 

@@ -5,11 +5,14 @@ import Observation
 @Observable
 final class SniprAppModel {
     let captureStore: CaptureStore
+    let preferences: SniprPreferences
     let coordinator: WindowCoordinator
 
     init() {
         let captureStore = CaptureStore()
+        let preferences = SniprPreferences()
         self.captureStore = captureStore
-        self.coordinator = WindowCoordinator(captureStore: captureStore)
+        self.preferences = preferences
+        self.coordinator = WindowCoordinator(captureStore: captureStore, preferences: preferences)
     }
 }

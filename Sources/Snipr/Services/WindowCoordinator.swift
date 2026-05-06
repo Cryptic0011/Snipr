@@ -1,17 +1,24 @@
 import AppKit
+import Observation
 import SwiftUI
 
 @MainActor
+@Observable
 final class WindowCoordinator {
     let captureStore: CaptureStore
+    let preferences: SniprPreferences
     private let captureService = ScreenCaptureService()
     private var commandPalettePanel: NSPanel?
     private var thumbnailPanel: NSPanel?
+    private var thumbnailHideTask: Task<Void, Never>?
+    private var isThumbnailStackHovered = false
+    var isThumbnailStackPinned = false
     private var previewWindows: [UUID: NSWindow] = [:]
     private var overlayWindows: [NSWindow] = []
 
-    init(captureStore: CaptureStore) {
+    init(captureStore: CaptureStore, preferences: SniprPreferences) {
         self.captureStore = captureStore
+        self.preferences = preferences
     }
 
     func showCommandPalette() {
@@ -80,6 +87,11 @@ final class WindowCoordinator {
     }
 
     func showThumbnailStack() {
+        guard preferences.showStackAfterCapture || thumbnailPanel != nil else {
+            return
+        }
+
+        thumbnailHideTask?.cancel()
         thumbnailPanel?.orderOut(nil)
 
         guard !captureStore.items.isEmpty, let screen = NSScreen.main else {
@@ -107,6 +119,41 @@ final class WindowCoordinator {
         panel.contentView = NSHostingView(rootView: ThumbnailStackView(store: captureStore, coordinator: self))
         thumbnailPanel = panel
         panel.orderFrontRegardless()
+        scheduleThumbnailAutoHide()
+    }
+
+    func hideThumbnailStack() {
+        thumbnailHideTask?.cancel()
+        thumbnailHideTask = nil
+        thumbnailPanel?.orderOut(nil)
+        thumbnailPanel = nil
+        isThumbnailStackHovered = false
+        isThumbnailStackPinned = false
+    }
+
+    func setThumbnailStackPinned(_ isPinned: Bool) {
+        isThumbnailStackPinned = isPinned
+        if isPinned {
+            thumbnailHideTask?.cancel()
+            thumbnailHideTask = nil
+        } else {
+            scheduleThumbnailAutoHide()
+        }
+    }
+
+    func setThumbnailStackHovering(_ isHovered: Bool) {
+        isThumbnailStackHovered = isHovered
+
+        guard preferences.pauseStackAutoHideOnHover, preferences.autoHideStack, !isThumbnailStackPinned else {
+            return
+        }
+
+        if isHovered {
+            thumbnailHideTask?.cancel()
+            thumbnailHideTask = nil
+        } else {
+            scheduleThumbnailAutoHide(delay: 2)
+        }
     }
 
     func openPreview(for item: CaptureItem) {
@@ -128,6 +175,10 @@ final class WindowCoordinator {
         previewWindows[item.id] = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+
+        if preferences.hideStackAfterPreview, !isThumbnailStackPinned {
+            hideThumbnailStack()
+        }
     }
 
     func copy(_ item: CaptureItem) {
@@ -156,10 +207,32 @@ final class WindowCoordinator {
     func clearStack() {
         do {
             try captureStore.clear()
-            thumbnailPanel?.orderOut(nil)
-            thumbnailPanel = nil
+            hideThumbnailStack()
         } catch {
             NSAlert(error: error).runModal()
+        }
+    }
+
+    private func scheduleThumbnailAutoHide(delay explicitDelay: Double? = nil) {
+        thumbnailHideTask?.cancel()
+
+        guard preferences.autoHideStack,
+              !isThumbnailStackPinned,
+              !(preferences.pauseStackAutoHideOnHover && isThumbnailStackHovered),
+              thumbnailPanel != nil else {
+            return
+        }
+
+        let delay = max(1, explicitDelay ?? preferences.stackAutoHideDelay)
+        thumbnailHideTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard let self,
+                  !self.isThumbnailStackPinned,
+                  !(self.preferences.pauseStackAutoHideOnHover && self.isThumbnailStackHovered) else {
+                return
+            }
+
+            self.hideThumbnailStack()
         }
     }
 

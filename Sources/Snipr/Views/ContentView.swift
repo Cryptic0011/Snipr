@@ -355,12 +355,36 @@ private struct StoragePanel: View {
 
                     DividerLine()
 
+                    StorageRow(
+                        title: "Stack Behavior",
+                        value: stackBehaviorSummary,
+                        systemImage: "timer",
+                        actionTitle: model.preferences.autoHideStack ? "Disable" : "Enable"
+                    ) {
+                        model.preferences.autoHideStack.toggle()
+                    }
+
+                    DividerLine()
+
                     StorageRow(title: "Clear Local Stack", value: "Remove capture history and files", systemImage: "trash", actionTitle: "Clear") {
                         model.coordinator.clearStack()
                     }
                 }
             }
         }
+    }
+
+    private var stackBehaviorSummary: String {
+        guard model.preferences.showStackAfterCapture else {
+            return "Hidden after capture"
+        }
+
+        guard model.preferences.autoHideStack else {
+            return "Stays visible until closed"
+        }
+
+        let hoverText = model.preferences.pauseStackAutoHideOnHover ? ", hover pauses" : ""
+        return "Hides after \(Int(model.preferences.stackAutoHideDelay))s\(hoverText)"
     }
 }
 
