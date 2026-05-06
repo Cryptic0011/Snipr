@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     let model: SniprAppModel
+    @State private var selectedTab: DashboardTab = .overview
 
     var body: some View {
         ZStack {
@@ -16,14 +17,14 @@ struct ContentView: View {
                     )
                     .frame(width: 355, alignment: .leading)
 
-                    DashboardPane(model: model)
+                    DashboardPane(model: model, selectedTab: selectedTab)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .padding(.horizontal, 52)
                 .padding(.top, 62)
                 .padding(.bottom, 12)
 
-                BottomStrip(model: model)
+                BottomStrip(model: model, selectedTab: $selectedTab)
                     .padding(.horizontal, 26)
                     .padding(.bottom, 10)
             }
@@ -38,6 +39,53 @@ struct ContentView: View {
         }
 
         return NSImage(systemSymbolName: "selection.pin.in.out", accessibilityDescription: "Snipr") ?? NSImage()
+    }
+}
+
+private enum DashboardTab: String, CaseIterable, Identifiable {
+    case overview
+    case captures
+    case permissions
+    case storage
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .overview:
+            "Overview"
+        case .captures:
+            "Captures"
+        case .permissions:
+            "Permissions"
+        case .storage:
+            "Storage"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .overview:
+            "sparkles"
+        case .captures:
+            "photo.stack"
+        case .permissions:
+            "lock.shield"
+        case .storage:
+            "folder"
+        }
+    }
+
+    var next: DashboardTab {
+        let tabs = Self.allCases
+        let index = tabs.firstIndex(of: self) ?? 0
+        return tabs[(index + 1) % tabs.count]
+    }
+
+    var previous: DashboardTab {
+        let tabs = Self.allCases
+        let index = tabs.firstIndex(of: self) ?? 0
+        return tabs[(index + tabs.count - 1) % tabs.count]
     }
 }
 
@@ -110,18 +158,20 @@ private struct HeroPane: View {
                     .lineLimit(3)
             }
 
-            FloatingKeys()
-                .frame(height: 145)
-
             VStack(alignment: .leading, spacing: 10) {
-                ActionButton(title: "Capture Area", systemImage: "selection.pin.in.out", shortcut: "⌘⇧4") {
+                ActionButton(title: "Capture Area", systemImage: "selection.pin.in.out") {
                     coordinator.startCaptureArea()
                 }
 
-                ActionButton(title: "Open Palette", systemImage: "command", shortcut: "⌘⇧Space") {
+                ActionButton(title: "Open Palette", systemImage: "command") {
                     coordinator.showCommandPalette()
                 }
             }
+
+            GlassMiniCard(
+                title: "Customize your flow",
+                subtitle: "Use Snipr from the palette, menu bar, or your preferred shortcut launcher."
+            )
 
             Spacer(minLength: 0)
         }
@@ -131,99 +181,200 @@ private struct HeroPane: View {
 
 private struct DashboardPane: View {
     let model: SniprAppModel
+    let selectedTab: DashboardTab
 
     var body: some View {
         VStack(spacing: 14) {
-            GlassPanel {
-                VStack(alignment: .leading, spacing: 26) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Unlock the full potential")
-                                .font(.system(size: 28, weight: .bold, design: .rounded))
+            switch selectedTab {
+            case .overview:
+                PermissionsPanel(model: model, compact: true)
+                    .frame(minHeight: 286, idealHeight: 304, maxHeight: 324)
+                RecentCapturesPanel(model: model)
+            case .captures:
+                RecentCapturesPanel(model: model)
+                    .frame(maxHeight: .infinity)
+            case .permissions:
+                PermissionsPanel(model: model, compact: false)
+                    .frame(maxHeight: .infinity)
+            case .storage:
+                StoragePanel(model: model)
+                    .frame(maxHeight: .infinity)
+            }
+        }
+    }
+}
 
-                            Text("Grant access once, then capture without friction.")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.54))
-                        }
+private struct PermissionsPanel: View {
+    let model: SniprAppModel
+    let compact: Bool
 
-                        Spacer()
+    var body: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: compact ? 20 : 26) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Unlock the full potential")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
 
-                        Button {
-                            model.coordinator.showCommandPalette()
-                        } label: {
-                            Label("Palette", systemImage: "command")
-                        }
-                        .buttonStyle(CompactDarkButtonStyle())
+                        Text("Grant only the access needed for local capture workflows.")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.54))
                     }
 
-                    VStack(spacing: 0) {
-                        PermissionRow(
-                            systemImage: "rectangle.dashed",
-                            title: "Screen Recording",
-                            subtitle: "Allows Snipr to capture selected regions.",
-                            isGranted: PermissionService.hasScreenRecordingAccess,
-                            actionTitle: PermissionService.hasScreenRecordingAccess ? "Access Granted" : "Open Settings"
-                        ) {
-                            PermissionService.openScreenRecordingSettings()
+                    Spacer()
+
+                    Button {
+                        model.coordinator.showCommandPalette()
+                    } label: {
+                        Label("Palette", systemImage: "command")
+                    }
+                    .buttonStyle(CompactDarkButtonStyle())
+                }
+
+                VStack(spacing: 0) {
+                    PermissionRow(
+                        systemImage: "rectangle.dashed",
+                        title: "Screen Recording",
+                        subtitle: "Required to capture selected screen regions.",
+                        isGranted: PermissionService.hasScreenRecordingAccess,
+                        actionTitle: PermissionService.hasScreenRecordingAccess ? "Access Granted" : "Open Settings"
+                    ) {
+                        PermissionService.openScreenRecordingSettings()
+                    }
+
+                    DividerLine()
+
+                    PermissionRow(
+                        systemImage: "figure.wave",
+                        title: "Accessibility",
+                        subtitle: "Optional for advanced automation and future window-aware capture.",
+                        isGranted: PermissionService.hasAccessibilityAccess,
+                        actionTitle: PermissionService.hasAccessibilityAccess ? "Access Granted" : "Request Access"
+                    ) {
+                        if !PermissionService.requestAccessibilityAccess() {
+                            PermissionService.openAccessibilitySettings()
                         }
+                    }
 
-                        DividerLine()
+                    DividerLine()
 
-                        PermissionRow(
-                            systemImage: "folder",
-                            title: "Local Capture Folder",
-                            subtitle: "Local PNG storage for your capture stack.",
-                            isGranted: true,
-                            actionTitle: "Reveal"
-                        ) {
-                            NSWorkspace.shared.activateFileViewerSelecting([model.captureStore.rootDirectory])
-                        }
-
-                        DividerLine()
-
-                        PermissionRow(
-                            systemImage: "keyboard",
-                            title: "Global Hotkeys",
-                            subtitle: "Palette and capture shortcuts are active.",
-                            isGranted: true,
-                            actionTitle: "Ready"
-                        ) {}
+                    PermissionRow(
+                        systemImage: "folder",
+                        title: "Local Capture Folder",
+                        subtitle: "PNG history stays on this Mac.",
+                        isGranted: true,
+                        actionTitle: "Reveal"
+                    ) {
+                        NSWorkspace.shared.activateFileViewerSelecting([model.captureStore.rootDirectory])
                     }
                 }
             }
-            .frame(minHeight: 286, idealHeight: 304, maxHeight: 324)
+        }
+    }
+}
 
-            GlassPanel {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack {
-                        Text("Recent Captures")
-                            .font(.system(size: 17, weight: .bold))
+private struct RecentCapturesPanel: View {
+    let model: SniprAppModel
 
-                        Spacer()
+    var body: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Text("Recent Captures")
+                        .font(.system(size: 17, weight: .bold))
 
-                        Button {
-                            model.coordinator.clearStack()
-                        } label: {
-                            Label("Clear", systemImage: "trash")
-                        }
-                        .buttonStyle(CompactDarkButtonStyle())
-                        .disabled(model.captureStore.items.isEmpty)
+                    Spacer()
+
+                    Button {
+                        model.coordinator.clearStack()
+                    } label: {
+                        Label("Clear", systemImage: "trash")
                     }
+                    .buttonStyle(CompactDarkButtonStyle())
+                    .disabled(model.captureStore.items.isEmpty)
+                }
 
-                    if model.captureStore.items.isEmpty {
-                        EmptyHistoryView()
-                    } else {
-                        ScrollView {
-                            LazyVStack(spacing: 10) {
-                                ForEach(model.captureStore.items.prefix(8)) { item in
-                                    CaptureHistoryRow(item: item, coordinator: model.coordinator)
-                                }
+                if model.captureStore.items.isEmpty {
+                    EmptyHistoryView()
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 10) {
+                            ForEach(model.captureStore.items.prefix(8)) { item in
+                                CaptureHistoryRow(item: item, coordinator: model.coordinator)
                             }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+private struct StoragePanel: View {
+    let model: SniprAppModel
+
+    var body: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 22) {
+                Text("Storage")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+
+                Text("Snipr saves captures locally as PNG files and keeps a lightweight metadata index beside them.")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.54))
+
+                VStack(spacing: 0) {
+                    StorageRow(title: "Capture Folder", value: model.captureStore.rootDirectory.path, systemImage: "folder", actionTitle: "Reveal") {
+                        NSWorkspace.shared.activateFileViewerSelecting([model.captureStore.rootDirectory])
+                    }
+
+                    DividerLine()
+
+                    StorageRow(title: "Stored Captures", value: "\(model.captureStore.items.count)", systemImage: "photo.stack", actionTitle: "Show") {
+                        model.coordinator.showThumbnailStack()
+                    }
+
+                    DividerLine()
+
+                    StorageRow(title: "Clear Local Stack", value: "Remove capture history and files", systemImage: "trash", actionTitle: "Clear") {
+                        model.coordinator.clearStack()
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct StorageRow: View {
+    let title: String
+    let value: String
+    let systemImage: String
+    let actionTitle: String
+    let action: () -> Void
+
+    var body: some View {
+        HStack(spacing: 18) {
+            Image(systemName: systemImage)
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(.white.opacity(0.82))
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title)
+                    .font(.system(size: 15, weight: .bold))
+
+                Text(value)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.48))
+                    .lineLimit(2)
+            }
+
+            Spacer()
+
+            Button(actionTitle, action: action)
+                .buttonStyle(OutlineStatusButtonStyle(isGranted: true))
+        }
+        .padding(.vertical, 13)
     }
 }
 
@@ -335,33 +486,38 @@ private struct EmptyHistoryView: View {
 
 private struct BottomStrip: View {
     let model: SniprAppModel
+    @Binding var selectedTab: DashboardTab
 
     var body: some View {
-        HStack(spacing: 18) {
+        HStack(spacing: 10) {
             Button {
-                model.coordinator.showCommandPalette()
+                selectedTab = selectedTab.previous
             } label: {
                 Image(systemName: "chevron.left")
             }
             .buttonStyle(IconDarkButtonStyle())
 
-            HStack(spacing: 8) {
-                ForEach(0..<11, id: \.self) { index in
-                    Capsule()
-                        .fill(index == 3 ? Color(red: 1.0, green: 0.37, blue: 0.43) : .white.opacity(0.16))
-                        .frame(width: index == 3 ? 54 : 13, height: 4)
-                        .shadow(color: index == 3 ? Color.red.opacity(0.8) : .clear, radius: 8)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(DashboardTab.allCases) { tab in
+                        Button {
+                            selectedTab = tab
+                        } label: {
+                            Label(tab.title, systemImage: tab.systemImage)
+                        }
+                        .buttonStyle(TabPillButtonStyle(isSelected: selectedTab == tab))
+                    }
                 }
             }
 
             Spacer()
 
-            Text("Hit ")
-                .foregroundStyle(.white.opacity(0.48))
-            + Text("⌘⇧Space")
-                .fontWeight(.bold)
-            + Text(" for commands")
-                .foregroundStyle(.white.opacity(0.48))
+            Button {
+                selectedTab = selectedTab.next
+            } label: {
+                Image(systemName: "chevron.right")
+            }
+            .buttonStyle(IconDarkButtonStyle())
 
             Button {
                 model.coordinator.startCaptureArea()
@@ -379,60 +535,6 @@ private struct BottomStrip: View {
                 .fill(Color(red: 0.105, green: 0.11, blue: 0.12).opacity(0.9))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.07)))
         )
-    }
-}
-
-private struct FloatingKeys: View {
-    var body: some View {
-        ZStack {
-            KeyCap(label: "⌘", width: 92, height: 72)
-                .rotationEffect(.degrees(-17))
-                .offset(x: -70, y: -30)
-                .opacity(0.38)
-                .blur(radius: 2)
-
-            KeyCap(label: "⇧", width: 92, height: 72)
-                .rotationEffect(.degrees(13))
-                .offset(x: 86, y: -36)
-                .opacity(0.28)
-                .blur(radius: 2)
-
-            KeyCap(label: "⌘", width: 96, height: 74)
-                .rotationEffect(.degrees(2))
-                .offset(x: -38, y: 16)
-
-            KeyCap(label: "space", width: 190, height: 76)
-                .rotationEffect(.degrees(-9))
-                .offset(x: 74, y: 30)
-        }
-    }
-}
-
-private struct KeyCap: View {
-    let label: String
-    let width: CGFloat
-    let height: CGFloat
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.15, green: 0.07, blue: 0.17),
-                        Color(red: 0.06, green: 0.04, blue: 0.08)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.1)))
-            .shadow(color: .black.opacity(0.58), radius: 12, y: 8)
-            .frame(width: width, height: height)
-            .overlay(
-                Text(label)
-                    .font(.system(size: label == "space" ? 23 : 28, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.9))
-            )
     }
 }
 
@@ -470,7 +572,6 @@ private struct DividerLine: View {
 private struct ActionButton: View {
     let title: String
     let systemImage: String
-    let shortcut: String
     let action: () -> Void
 
     var body: some View {
@@ -478,8 +579,6 @@ private struct ActionButton: View {
             HStack {
                 Label(title, systemImage: systemImage)
                 Spacer()
-                Text(shortcut)
-                    .foregroundStyle(.white.opacity(0.42))
             }
             .font(.system(size: 14, weight: .bold))
             .padding(.horizontal, 14)
@@ -487,6 +586,27 @@ private struct ActionButton: View {
             .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct GlassMiniCard: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(title)
+                .font(.system(size: 15, weight: .bold))
+
+            Text(subtitle)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.52))
+                .lineLimit(3)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.08)))
     }
 }
 
@@ -521,6 +641,26 @@ private struct PrimaryRaycastButtonStyle: ButtonStyle {
             .background(
                 RoundedRectangle(cornerRadius: 7)
                     .fill(Color(red: 0.36, green: 0.2, blue: 0.22).opacity(configuration.isPressed ? 0.75 : 1.0))
+            )
+    }
+}
+
+private struct TabPillButtonStyle: ButtonStyle {
+    let isSelected: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(.white.opacity(configuration.isPressed ? 0.64 : isSelected ? 0.96 : 0.56))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(isSelected ? Color(red: 0.35, green: 0.17, blue: 0.2).opacity(0.96) : .white.opacity(0.055))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7)
+                            .stroke(isSelected ? Color(red: 1.0, green: 0.38, blue: 0.44).opacity(0.36) : .white.opacity(0.06))
+                    )
             )
     }
 }
