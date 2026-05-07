@@ -8,6 +8,9 @@ enum SniprCommandID: String, CaseIterable, Codable, Sendable {
     case clearStack
     case openSettings
     case quit
+    case ocrSelection
+    case showOCRHistory
+    case pickColor
 }
 
 struct SniprCommand: Identifiable, Equatable, Sendable {
@@ -38,6 +41,27 @@ struct SniprCommand: Identifiable, Equatable, Sendable {
             subtitle: "Record a selected screen region",
             systemImage: "record.circle",
             shortcut: "⌘⇧6"
+        ),
+        .init(
+            id: .ocrSelection,
+            title: "OCR Selection",
+            subtitle: "Recognize text in a region — copies to clipboard",
+            systemImage: "textformat.123",
+            shortcut: "⌘⇧O"
+        ),
+        .init(
+            id: .showOCRHistory,
+            title: "Show OCR History",
+            subtitle: "Re-copy a previous OCR result",
+            systemImage: "list.bullet.rectangle",
+            shortcut: ""
+        ),
+        .init(
+            id: .pickColor,
+            title: "Pick Color",
+            subtitle: "Sample a pixel color and copy it",
+            systemImage: "eyedropper",
+            shortcut: "⌘⇧C"
         ),
         .init(
             id: .openHistory,

@@ -28,4 +28,13 @@ enum ClipboardSink {
             pasteboard.setData(data, forType: NSPasteboard.PasteboardType(format.utType.identifier))
         }
     }
+
+    /// Replace the pasteboard contents with the given string. Used by OCR and
+    /// the color sampler to surface results without a popup.
+    @MainActor
+    static func copyText(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
 }

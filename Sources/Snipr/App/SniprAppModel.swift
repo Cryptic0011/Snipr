@@ -6,22 +6,28 @@ import Observation
 final class SniprAppModel {
     let captureStore: CaptureStore
     let preferences: SniprPreferences
+    let ocrHistory: OCRHistoryStore
     let coordinator: WindowCoordinator
     private var hotKeyService: HotKeyService?
 
     init(
         captureEngine: CaptureEngine = SCKCaptureEngine(),
-        recordingEngine: RecordingEngine = SCKRecordingEngine()
+        recordingEngine: RecordingEngine = SCKRecordingEngine(),
+        ocrEngine: any OCREngine = VisionOCREngine()
     ) {
         let captureStore = CaptureStore()
         let preferences = SniprPreferences()
+        let ocrHistory = OCRHistoryStore()
         self.captureStore = captureStore
         self.preferences = preferences
+        self.ocrHistory = ocrHistory
         self.coordinator = WindowCoordinator(
             captureStore: captureStore,
             preferences: preferences,
             captureEngine: captureEngine,
-            recordingEngine: recordingEngine
+            recordingEngine: recordingEngine,
+            ocrEngine: ocrEngine,
+            ocrHistory: ocrHistory
         )
     }
 
@@ -65,6 +71,10 @@ final class SniprAppModel {
             coordinator.showThumbnailStackForced()
         case .clearStack:
             coordinator.clearStack()
+        case .ocr:
+            coordinator.startOCR()
+        case .colorPick:
+            coordinator.startColorPick()
         }
     }
 }

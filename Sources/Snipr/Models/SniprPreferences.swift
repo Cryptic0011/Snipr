@@ -15,6 +15,7 @@ final class SniprPreferences {
         static let saveToDiskOnCapture = "saveToDiskOnCapture"
         static let captureFormat = "captureFormat"
         static let captureFilenameTemplate = "captureFilenameTemplate"
+        static let colorOutputFormat = "colorOutputFormat"
     }
 
     var showStackAfterCapture: Bool {
@@ -62,6 +63,11 @@ final class SniprPreferences {
         didSet { defaults.set(captureFilenameTemplate, forKey: Keys.captureFilenameTemplate) }
     }
 
+    /// Phase 3: format used by the pixel-sampler / color picker hotkey.
+    var colorOutputFormat: ColorOutputFormat {
+        didSet { defaults.set(colorOutputFormat.rawValue, forKey: Keys.colorOutputFormat) }
+    }
+
     @ObservationIgnored
     private let defaults: UserDefaults
 
@@ -78,6 +84,9 @@ final class SniprPreferences {
         captureFormat = Self.loadCaptureFormat(from: defaults)
         captureFilenameTemplate = (defaults.object(forKey: Keys.captureFilenameTemplate) as? String)
             ?? CaptureFilenameTemplate.defaultTemplate
+        colorOutputFormat = ColorOutputFormat(
+            rawValue: defaults.string(forKey: Keys.colorOutputFormat) ?? ""
+        ) ?? .hex
     }
 
     func resetStackDefaults() {

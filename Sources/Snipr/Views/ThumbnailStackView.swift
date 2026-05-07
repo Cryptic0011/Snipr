@@ -134,8 +134,6 @@ private struct ExpandedSidebar: View {
     @Binding var focusedID: UUID?
     var keyboardFocused: FocusState<Bool>.Binding
 
-    @State private var pinPlaceholderShown = false
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
@@ -151,7 +149,7 @@ private struct ExpandedSidebar: View {
                                 isFocused: focusedID == item.id,
                                 dragURLs: { dragURLs(triggeredBy: item) },
                                 onTap: { event in handleTap(item: item, event: event) },
-                                onPinPlaceholder: { pinPlaceholderShown = true }
+                                onPin: { coordinator.pin(item) }
                             )
                             .id(item.id)
                         }
@@ -188,11 +186,6 @@ private struct ExpandedSidebar: View {
         .onKeyPress(keys: ["p"]) { event in
             guard event.modifiers.contains(.command) else { return .ignored }
             pinFocused(); return .handled
-        }
-        .alert("Pin coming in Phase 3", isPresented: $pinPlaceholderShown) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Pinning a screenshot to a floating reference window lands in Phase 3.")
         }
     }
 
@@ -308,7 +301,10 @@ private struct ExpandedSidebar: View {
     }
 
     private func pinFocused() {
-        pinPlaceholderShown = true
+        guard let id = focusedID,
+              let item = store.items.first(where: { $0.id == id }),
+              item.mediaType == .image else { return }
+        coordinator.pin(item)
     }
 
     /// Items the keyboard / batch action should target — selection if any,
@@ -418,7 +414,7 @@ private struct SidebarRow: View {
     let isFocused: Bool
     let dragURLs: () -> [URL]
     let onTap: (NSEvent.ModifierFlags) -> Void
-    let onPinPlaceholder: () -> Void
+    let onPin: () -> Void
 
     @State private var isHovering = false
 
@@ -512,8 +508,8 @@ private struct SidebarRow: View {
             QuickActionButton(systemImage: "folder", help: "Reveal in Finder") {
                 coordinator.reveal(item)
             }
-            QuickActionButton(systemImage: "pin", help: "Pin (Phase 3)") {
-                onPinPlaceholder()
+            QuickActionButton(systemImage: "pin", help: "Pin to floating window") {
+                onPin()
             }
             QuickActionButton(systemImage: "pencil.tip.crop.circle", help: "Annotate") {
                 coordinator.openPreview(for: item)

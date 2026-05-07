@@ -13,6 +13,8 @@ enum SniprHotKeyAction: String, CaseIterable, Codable, Identifiable, Sendable {
     case hideStack
     case showStack
     case clearStack
+    case ocr
+    case colorPick
 
     var id: String { rawValue }
 
@@ -38,6 +40,10 @@ enum SniprHotKeyAction: String, CaseIterable, Codable, Identifiable, Sendable {
             "Show Stack"
         case .clearStack:
             "Clear Stack"
+        case .ocr:
+            "OCR Selection"
+        case .colorPick:
+            "Pick Color"
         }
     }
 
@@ -63,6 +69,10 @@ enum SniprHotKeyAction: String, CaseIterable, Codable, Identifiable, Sendable {
             "Show recent captures as a floating stack"
         case .clearStack:
             "Remove local capture history"
+        case .ocr:
+            "Recognize text in a selected region"
+        case .colorPick:
+            "Sample a pixel color and copy it"
         }
     }
 
@@ -88,6 +98,10 @@ enum SniprHotKeyAction: String, CaseIterable, Codable, Identifiable, Sendable {
             "photo.stack"
         case .clearStack:
             "trash"
+        case .ocr:
+            "textformat.123"
+        case .colorPick:
+            "eyedropper"
         }
     }
 
@@ -123,7 +137,9 @@ enum HotKeyDefaults {
         .commandPalette: .init(keyCode: UInt32(kVK_Space), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: true),
         .hideStack: .init(keyCode: UInt32(kVK_Escape), modifiers: hotKeyModifiers(command: true, option: true), isEnabled: true),
         .showStack: .init(keyCode: UInt32(kVK_ANSI_S), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: true),
-        .clearStack: .init(keyCode: UInt32(kVK_Delete), modifiers: hotKeyModifiers(command: true), isEnabled: true)
+        .clearStack: .init(keyCode: UInt32(kVK_Delete), modifiers: hotKeyModifiers(command: true), isEnabled: true),
+        .ocr: .init(keyCode: UInt32(kVK_ANSI_O), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: true),
+        .colorPick: .init(keyCode: UInt32(kVK_ANSI_C), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: true)
     ]
 }
 

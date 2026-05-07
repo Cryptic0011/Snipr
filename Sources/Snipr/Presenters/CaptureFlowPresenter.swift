@@ -13,6 +13,8 @@ final class CaptureFlowPresenter {
     let captureStore: CaptureStore
     let preferences: SniprPreferences
     let captureEngine: CaptureEngine
+    let ocrEngine: any OCREngine
+    let ocrHistory: OCRHistoryStore
 
     /// Last completed capture region; remembered in memory so the user can
     /// repeat it via `captureLastRegion` without re-dragging.
@@ -24,10 +26,46 @@ final class CaptureFlowPresenter {
     var onError: ((Error) -> Void)?
     var onCaptureStored: (() -> Void)?
 
-    init(captureStore: CaptureStore, preferences: SniprPreferences, captureEngine: CaptureEngine) {
+    init(
+        captureStore: CaptureStore,
+        preferences: SniprPreferences,
+        captureEngine: CaptureEngine,
+        ocrEngine: any OCREngine = VisionOCREngine(),
+        ocrHistory: OCRHistoryStore? = nil
+    ) {
         self.captureStore = captureStore
         self.preferences = preferences
         self.captureEngine = captureEngine
+        self.ocrEngine = ocrEngine
+        self.ocrHistory = ocrHistory ?? OCRHistoryStore()
+    }
+
+    /// Capture pixels for the selected region, run OCR, copy the recognized
+    /// text to the clipboard, and surface a haptic cue. Used by the Phase 3
+    /// OCR hotkey path.
+    func runOCR(displayID: CGDirectDisplayID, screen: NSScreen, rect: CGRect) {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            await self?.performOCR(displayID: displayID, screen: screen, rect: rect)
+        }
+    }
+
+    private func performOCR(displayID: CGDirectDisplayID, screen: NSScreen, rect: CGRect) async {
+        do {
+            let captured = try await captureEngine.capture(
+                displayID: displayID,
+                rectInDisplayPoints: rect,
+                screen: screen
+            )
+            let text = try await ocrEngine.recognizeText(in: captured.cgImage)
+            ClipboardSink.copyText(text)
+            ocrHistory.append(text: text)
+            // Subtle haptic — replaces the popup the blueprint explicitly
+            // calls out as a non-goal.
+            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+        } catch {
+            onError?(error)
+        }
     }
 
     /// Snapshot of the most recently captured region, used for last-region

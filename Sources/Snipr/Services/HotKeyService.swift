@@ -132,6 +132,10 @@ private extension SniprHotKeyAction {
             9
         case .captureLastRegion:
             10
+        case .ocr:
+            11
+        case .colorPick:
+            12
         }
     }
 }

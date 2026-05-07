@@ -9,6 +9,7 @@ import SwiftUI
 enum CaptureOverlayMode: Sendable {
     case screenshot
     case recording
+    case ocr
 }
 
 /// Owns the per-screen selection overlay windows. Its job is purely to put up
@@ -20,10 +21,12 @@ final class OverlayPresenter {
     private var overlayWindows: [NSWindow] = []
     private var hostViews: [CaptureSelectionNSView] = []
     private var pickerViews: [WindowPickerNSView] = []
+    private var colorPickerViews: [ColorPickerOverlayView] = []
     private var activeMode: CaptureOverlayMode?
     var onSelectionComplete: ((CaptureOverlayMode, CGDirectDisplayID, NSScreen, CGRect) -> Void)?
     var onWindowPicked: ((WindowPickerNSView.WindowEntry, CGDirectDisplayID, NSScreen, CGRect) -> Void)?
     var onCancel: (() -> Void)?
+    private var onColorSampled: ((ColorPickerOverlayView.SampleResult) -> Void)?
 
     init() {}
 
@@ -95,6 +98,43 @@ final class OverlayPresenter {
         }
     }
 
+    /// Show a per-screen color picker overlay. Each screen gets a translucent
+    /// click-through panel; click samples a pixel and reports back via the
+    /// closure. Cancel via Esc or right-click.
+    func showColorPickerOverlays(onSample: @escaping (ColorPickerOverlayView.SampleResult) -> Void) {
+        closeCaptureOverlays()
+        activeMode = .ocr // not really, but distinct from screenshot/recording
+        onColorSampled = onSample
+
+        var pickers: [ColorPickerOverlayView] = []
+        for screen in NSScreen.screens {
+            guard let _ = screen.sniprDisplayID else { continue }
+            let view = ColorPickerOverlayView()
+            view.sourceScale = screen.backingScaleFactor
+            view.onSample = { [weak self] sample in
+                self?.closeCaptureOverlays()
+                self?.onColorSampled?(sample)
+                self?.onColorSampled = nil
+            }
+            view.onCancel = { [weak self] in
+                self?.closeCaptureOverlays()
+                self?.onCancel?()
+                self?.onColorSampled = nil
+            }
+
+            let window = makePanel(frame: screen.frame, content: view)
+            overlayWindows.append(window)
+            pickers.append(view)
+            window.orderFrontRegardless()
+            window.makeKey()
+        }
+        self.colorPickerViews = pickers
+
+        Task { @MainActor [weak self] in
+            await self?.loadDisplayImagesForColorPickers()
+        }
+    }
+
     func closeCaptureOverlays() {
         overlayWindows.forEach { window in
             window.contentView = nil
@@ -104,6 +144,7 @@ final class OverlayPresenter {
         overlayWindows.removeAll()
         hostViews.removeAll()
         pickerViews.removeAll()
+        colorPickerViews.removeAll()
         activeMode = nil
     }
 
@@ -179,6 +220,43 @@ final class OverlayPresenter {
                 return displayBoundsToScreenPoints(frame, displayID: displayID, screen: screen)
             }
             view.setSnapEdges(rectsForDisplay)
+        }
+    }
+
+    private func loadDisplayImagesForColorPickers() async {
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            for view in colorPickerViews {
+                guard let screen = view.window?.screen, let displayID = screen.sniprDisplayID,
+                      let scDisplay = content.displays.first(where: { $0.displayID == displayID }) else {
+                    continue
+                }
+
+                let configuration = SCStreamConfiguration()
+                configuration.width = Int(CGDisplayBounds(displayID).width)
+                configuration.height = Int(CGDisplayBounds(displayID).height)
+                configuration.showsCursor = false
+                configuration.capturesAudio = false
+
+                let overlayCGWindows = overlayWindows.compactMap { $0.windowNumber }
+                let excluded = content.windows.filter { window in
+                    overlayCGWindows.contains(Int(window.windowID))
+                }
+                let filter = SCContentFilter(display: scDisplay, excludingWindows: excluded)
+
+                do {
+                    let image = try await SCScreenshotManager.captureImage(
+                        contentFilter: filter,
+                        configuration: configuration
+                    )
+                    view.setSourceImage(image)
+                } catch {
+                    // Non-fatal — picker still works for visible cursor
+                    // movement, just no live sampling preview.
+                }
+            }
+        } catch {
+            // Non-fatal.
         }
     }
 

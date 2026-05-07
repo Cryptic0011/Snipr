@@ -19,15 +19,22 @@ final class WindowCoordinator {
     private var commandPalettePresenter: CommandPalettePresenter?
     private var captureToolbarPresenter: CaptureToolbarPresenter?
 
+    let ocrHistory: OCRHistoryStore
+    let pinPresenter: PinPresenter
+
     init(
         captureStore: CaptureStore,
         preferences: SniprPreferences,
         captureEngine: CaptureEngine,
-        recordingEngine: RecordingEngine
+        recordingEngine: RecordingEngine,
+        ocrEngine: any OCREngine,
+        ocrHistory: OCRHistoryStore
     ) {
         self.captureStore = captureStore
         self.preferences = preferences
         self.captureEngine = captureEngine
+        self.ocrHistory = ocrHistory
+        self.pinPresenter = PinPresenter()
         self.overlayPresenter = OverlayPresenter()
         self.stackPresenter = StackPresenter(captureStore: captureStore, preferences: preferences)
         self.recordingPresenter = RecordingPresenter(recordingEngine: recordingEngine, captureStore: captureStore)
@@ -35,7 +42,9 @@ final class WindowCoordinator {
         self.captureFlowPresenter = CaptureFlowPresenter(
             captureStore: captureStore,
             preferences: preferences,
-            captureEngine: captureEngine
+            captureEngine: captureEngine,
+            ocrEngine: ocrEngine,
+            ocrHistory: ocrHistory
         )
         wirePresenters()
     }
@@ -51,6 +60,9 @@ final class WindowCoordinator {
         case .clearStack: clearStack()
         case .openSettings: openSettingsWindow()
         case .quit: NSApp.terminate(nil)
+        case .ocrSelection: startOCR()
+        case .showOCRHistory: showOCRHistory()
+        case .pickColor: startColorPick()
         }
     }
 
@@ -90,6 +102,42 @@ final class WindowCoordinator {
     func startWindowCapture() {
         guard captureFlowPresenter.ensureScreenRecordingAccess() else { return }
         overlayPresenter.showWindowPickerOverlays()
+    }
+
+    func startOCR() {
+        guard captureFlowPresenter.ensureScreenRecordingAccess() else { return }
+        overlayPresenter.showCaptureOverlays(mode: .ocr)
+    }
+
+    func startColorPick() {
+        guard captureFlowPresenter.ensureScreenRecordingAccess() else { return }
+        overlayPresenter.showColorPickerOverlays { [weak self] result in
+            guard let self else { return }
+            let formatted = ColorPicker.format(
+                red: result.red,
+                green: result.green,
+                blue: result.blue,
+                format: self.preferences.colorOutputFormat
+            )
+            ClipboardSink.copyText(formatted)
+            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+        }
+    }
+
+    func pin(_ item: CaptureItem) {
+        pinPresenter.pin(item: item, onCopy: { [weak self] in self?.copy(item) },
+                         onSave: { [weak self] in self?.saveAs(item) })
+    }
+
+    func showOCRHistory() {
+        // Surfaced in the command palette via `SniprCommand`. Selecting an
+        // entry there calls `recopyOCREntry(_:)` directly.
+        showCommandPalette()
+    }
+
+    func recopyOCREntry(_ entry: OCRHistoryEntry) {
+        ClipboardSink.copyText(entry.text)
+        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
     }
 
     func captureLastRegion() {
@@ -188,6 +236,8 @@ final class WindowCoordinator {
             captureFlowPresenter.completeCapture(displayID: displayID, screen: screen, rect: rect)
         case .recording:
             recordingPresenter.start(displayID: displayID, screen: screen, rect: rect)
+        case .ocr:
+            captureFlowPresenter.runOCR(displayID: displayID, screen: screen, rect: rect)
         }
     }
 
