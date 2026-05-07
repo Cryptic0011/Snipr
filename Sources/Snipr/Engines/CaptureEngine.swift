@@ -1,13 +1,49 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import ImageIO
+import UniformTypeIdentifiers
 
-/// PNG-encoded still capture produced by a `CaptureEngine`. The shape matches
-/// what `CaptureStore.addCapture` already expects, so engine swaps don't
-/// ripple into storage.
+/// Result of a still capture. Carries both the raw `CGImage` (so the flow
+/// presenter can sample / reencode under the user's chosen format) and a
+/// pre-encoded PNG snapshot (so callers that just want bytes don't pay for a
+/// round-trip).
 struct CapturedImage: Sendable {
+    let cgImage: CGImage
     let pngData: Data
     let pixelSize: CGSize
+
+    /// Encode the underlying `CGImage` into the requested format. Returns
+    /// `nil` if `ImageIO` can't satisfy the destination type — caller should
+    /// fall back to `pngData` in that case.
+    func encode(as format: CaptureFormat) -> Data? {
+        if case .png = format {
+            return pngData
+        }
+
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            data,
+            format.utType.identifier as CFString,
+            1,
+            nil
+        ) else {
+            return nil
+        }
+
+        var properties: [CFString: Any] = [:]
+        if let quality = format.quality {
+            properties[kCGImageDestinationLossyCompressionQuality] = quality
+        }
+
+        CGImageDestinationAddImage(destination, cgImage, properties as CFDictionary)
+
+        guard CGImageDestinationFinalize(destination) else {
+            return nil
+        }
+
+        return data as Data
+    }
 }
 
 enum ScreenCaptureError: LocalizedError {

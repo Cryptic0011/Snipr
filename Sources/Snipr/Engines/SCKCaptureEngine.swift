@@ -63,6 +63,7 @@ struct SCKCaptureEngine: CaptureEngine {
         }
 
         return CapturedImage(
+            cgImage: cgImage,
             pngData: data as Data,
             pixelSize: CGSize(width: cgImage.width, height: cgImage.height)
         )

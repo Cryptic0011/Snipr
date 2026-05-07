@@ -14,8 +14,24 @@ final class FakeCaptureEngine: CaptureEngine {
 
     var invocations: [Invocation] = []
     var stubbedResult: Result<CapturedImage, Error> = .success(
-        CapturedImage(pngData: Data([0x89]), pixelSize: CGSize(width: 8, height: 6))
+        CapturedImage(cgImage: FakeCaptureEngine.makeCGImage(), pngData: Data([0x89]), pixelSize: CGSize(width: 8, height: 6))
     )
+
+    static func makeCGImage(width: Int = 8, height: Int = 6) -> CGImage {
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        context.setFillColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        return context.makeImage()!
+    }
 
     func capture(displayID: CGDirectDisplayID, rectInDisplayPoints: CGRect, screen: NSScreen) async throws -> CapturedImage {
         invocations.append(Invocation(displayID: displayID, rectInDisplayPoints: rectInDisplayPoints, screen: screen))

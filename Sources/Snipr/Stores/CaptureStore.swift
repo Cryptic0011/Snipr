@@ -27,12 +27,21 @@ final class CaptureStore {
     func addCapture(
         pngData: Data,
         pixelSize: CGSize,
-        displayID: UInt32?
+        displayID: UInt32?,
+        fileExtension: String = "png",
+        suggestedFilename: String? = nil
     ) throws -> CaptureItem {
         try ensureDirectoriesExist()
 
         let id = UUID()
-        let imageURL = imagesDirectory.appending(path: "\(id.uuidString).png")
+        let baseFilename: String
+        if let suggested = suggestedFilename,
+           let unique = Self.uniqueFilename(in: imagesDirectory, suggestion: suggested) {
+            baseFilename = unique
+        } else {
+            baseFilename = "\(id.uuidString).\(fileExtension)"
+        }
+        let imageURL = imagesDirectory.appending(path: baseFilename)
         try pngData.write(to: imageURL, options: [.atomic])
 
         let item = CaptureItem(
@@ -144,6 +153,32 @@ final class CaptureStore {
     private func ensureDirectoriesExist() throws {
         try fileManager.createDirectory(at: imagesDirectory, withIntermediateDirectories: true)
         try fileManager.createDirectory(at: recordingsDirectory, withIntermediateDirectories: true)
+    }
+
+    /// Disambiguate a user-friendly filename by appending ` (n)` if the base
+    /// is already on disk. Keeps the captures folder readable when a
+    /// template-based name collides (e.g. two captures within the same
+    /// second).
+    private static func uniqueFilename(in directory: URL, suggestion: String) -> String? {
+        guard !suggestion.isEmpty else { return nil }
+        let fileManager = FileManager.default
+        let candidate = directory.appending(path: suggestion)
+        if !fileManager.fileExists(atPath: candidate.path) {
+            return suggestion
+        }
+
+        let url = URL(fileURLWithPath: suggestion)
+        let stem = url.deletingPathExtension().lastPathComponent
+        let ext = url.pathExtension
+
+        for index in 2...999 {
+            let next = ext.isEmpty ? "\(stem) (\(index))" : "\(stem) (\(index)).\(ext)"
+            let nextURL = directory.appending(path: next)
+            if !fileManager.fileExists(atPath: nextURL.path) {
+                return next
+            }
+        }
+        return nil
     }
 }
 

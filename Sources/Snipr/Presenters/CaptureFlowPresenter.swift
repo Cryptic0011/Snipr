@@ -11,38 +11,114 @@ import SwiftUI
 @Observable
 final class CaptureFlowPresenter {
     let captureStore: CaptureStore
+    let preferences: SniprPreferences
     let captureEngine: CaptureEngine
+
+    /// Last completed capture region; remembered in memory so the user can
+    /// repeat it via `captureLastRegion` without re-dragging.
+    private(set) var lastRegion: LastRegion?
+
+    /// Monotonic sequence used by filename templates (`{seq}` token).
+    private var captureSequence: Int = 0
 
     var onError: ((Error) -> Void)?
     var onCaptureStored: (() -> Void)?
 
-    init(captureStore: CaptureStore, captureEngine: CaptureEngine) {
+    init(captureStore: CaptureStore, preferences: SniprPreferences, captureEngine: CaptureEngine) {
         self.captureStore = captureStore
+        self.preferences = preferences
         self.captureEngine = captureEngine
     }
 
-    func completeCapture(displayID: CGDirectDisplayID, screen: NSScreen, rect: CGRect) {
+    /// Snapshot of the most recently captured region, used for last-region
+    /// recall. We keep `displayID` + `screenFrame` so we can find the same
+    /// `NSScreen` even if the screens list reordered between captures.
+    struct LastRegion: Sendable, Equatable {
+        let displayID: CGDirectDisplayID
+        let screenFrame: CGRect
+        let rect: CGRect
+    }
+
+    func completeCapture(
+        displayID: CGDirectDisplayID,
+        screen: NSScreen,
+        rect: CGRect,
+        windowTitle: String? = nil,
+        appName: String? = nil
+    ) {
         // Tiny delay so the overlay window finishes tearing down before we
         // ask SCK for pixels — without it the overlay would land in the shot.
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 120_000_000)
-            await self?.storeCapture(displayID: displayID, screen: screen, rect: rect)
+            await self?.storeCapture(
+                displayID: displayID,
+                screen: screen,
+                rect: rect,
+                windowTitle: windowTitle,
+                appName: appName
+            )
         }
     }
 
-    func storeCapture(displayID: CGDirectDisplayID, screen: NSScreen, rect: CGRect) async {
+    func captureLastRegion() {
+        guard let last = lastRegion else { return }
+        guard let screen = NSScreen.screens.first(where: { $0.frame == last.screenFrame }) ?? NSScreen.main else {
+            return
+        }
+        guard let displayID = screen.sniprDisplayID else { return }
+        completeCapture(displayID: displayID, screen: screen, rect: last.rect)
+    }
+
+    var hasLastRegion: Bool { lastRegion != nil }
+
+    func storeCapture(
+        displayID: CGDirectDisplayID,
+        screen: NSScreen,
+        rect: CGRect,
+        windowTitle: String? = nil,
+        appName: String? = nil
+    ) async {
         do {
             let captured = try await captureEngine.capture(
                 displayID: displayID,
                 rectInDisplayPoints: rect,
                 screen: screen
             )
-            _ = try captureStore.addCapture(
-                pngData: captured.pngData,
+
+            captureSequence &+= 1
+            let format = preferences.captureFormat
+            let encoded = captured.encode(as: format) ?? captured.pngData
+
+            let suggestedFilename = CaptureFilenameTemplate.expand(
+                template: preferences.captureFilenameTemplate,
+                date: Date(),
+                appName: appName,
+                windowTitle: windowTitle,
                 pixelSize: captured.pixelSize,
-                displayID: displayID
+                sequence: captureSequence,
+                fileExtension: format.fileExtension
             )
-            onCaptureStored?()
+
+            if preferences.copyToClipboardOnCapture {
+                ClipboardSink.copy(data: encoded, format: format)
+            }
+
+            if preferences.saveToDiskOnCapture {
+                _ = try captureStore.addCapture(
+                    pngData: encoded,
+                    pixelSize: captured.pixelSize,
+                    displayID: displayID,
+                    fileExtension: format.fileExtension,
+                    suggestedFilename: suggestedFilename
+                )
+                onCaptureStored?()
+            }
+
+            lastRegion = LastRegion(
+                displayID: displayID,
+                screenFrame: screen.frame,
+                rect: rect
+            )
         } catch {
             onError?(error)
         }

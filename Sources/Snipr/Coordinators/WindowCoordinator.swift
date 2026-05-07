@@ -32,7 +32,11 @@ final class WindowCoordinator {
         self.stackPresenter = StackPresenter(captureStore: captureStore, preferences: preferences)
         self.recordingPresenter = RecordingPresenter(recordingEngine: recordingEngine, captureStore: captureStore)
         self.previewPresenter = PreviewPresenter(captureStore: captureStore)
-        self.captureFlowPresenter = CaptureFlowPresenter(captureStore: captureStore, captureEngine: captureEngine)
+        self.captureFlowPresenter = CaptureFlowPresenter(
+            captureStore: captureStore,
+            preferences: preferences,
+            captureEngine: captureEngine
+        )
         wirePresenters()
     }
 

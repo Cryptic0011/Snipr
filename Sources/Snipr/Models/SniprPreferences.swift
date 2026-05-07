@@ -11,6 +11,10 @@ final class SniprPreferences {
         static let pauseStackAutoHideOnHover = "pauseStackAutoHideOnHover"
         static let hideStackAfterPreview = "hideStackAfterPreview"
         static let hotKeyBindings = "hotKeyBindings"
+        static let copyToClipboardOnCapture = "copyToClipboardOnCapture"
+        static let saveToDiskOnCapture = "saveToDiskOnCapture"
+        static let captureFormat = "captureFormat"
+        static let captureFilenameTemplate = "captureFilenameTemplate"
     }
 
     var showStackAfterCapture: Bool {
@@ -37,6 +41,27 @@ final class SniprPreferences {
         didSet { saveHotKeyBindings() }
     }
 
+    /// Phase 1: copy each capture to the clipboard automatically.
+    var copyToClipboardOnCapture: Bool {
+        didSet { defaults.set(copyToClipboardOnCapture, forKey: Keys.copyToClipboardOnCapture) }
+    }
+
+    /// Phase 1: persist captures to the filesystem-backed stack. When this is
+    /// false the capture is clipboard-only and never lands in the stack.
+    var saveToDiskOnCapture: Bool {
+        didSet { defaults.set(saveToDiskOnCapture, forKey: Keys.saveToDiskOnCapture) }
+    }
+
+    /// Phase 1: encoded format new captures land on disk / clipboard as.
+    var captureFormat: CaptureFormat {
+        didSet { saveCaptureFormat() }
+    }
+
+    /// Phase 1: token-driven naming template (see `CaptureFilenameTemplate`).
+    var captureFilenameTemplate: String {
+        didSet { defaults.set(captureFilenameTemplate, forKey: Keys.captureFilenameTemplate) }
+    }
+
     @ObservationIgnored
     private let defaults: UserDefaults
 
@@ -48,6 +73,11 @@ final class SniprPreferences {
         pauseStackAutoHideOnHover = defaults.object(forKey: Keys.pauseStackAutoHideOnHover) as? Bool ?? true
         hideStackAfterPreview = defaults.object(forKey: Keys.hideStackAfterPreview) as? Bool ?? true
         hotKeyBindings = Self.loadHotKeyBindings(from: defaults)
+        copyToClipboardOnCapture = defaults.object(forKey: Keys.copyToClipboardOnCapture) as? Bool ?? true
+        saveToDiskOnCapture = defaults.object(forKey: Keys.saveToDiskOnCapture) as? Bool ?? true
+        captureFormat = Self.loadCaptureFormat(from: defaults)
+        captureFilenameTemplate = (defaults.object(forKey: Keys.captureFilenameTemplate) as? String)
+            ?? CaptureFilenameTemplate.defaultTemplate
     }
 
     func resetStackDefaults() {
@@ -91,6 +121,11 @@ final class SniprPreferences {
         defaults.set(data, forKey: Keys.hotKeyBindings)
     }
 
+    private func saveCaptureFormat() {
+        guard let data = try? JSONEncoder().encode(captureFormat) else { return }
+        defaults.set(data, forKey: Keys.captureFormat)
+    }
+
     private static func loadHotKeyBindings(from defaults: UserDefaults) -> [SniprHotKeyAction: HotKeyBinding] {
         guard let data = defaults.data(forKey: Keys.hotKeyBindings),
               let stored = try? JSONDecoder().decode([SniprHotKeyAction: HotKeyBinding].self, from: data) else {
@@ -98,5 +133,13 @@ final class SniprPreferences {
         }
 
         return HotKeyDefaults.bindings.merging(stored) { _, stored in stored }
+    }
+
+    private static func loadCaptureFormat(from defaults: UserDefaults) -> CaptureFormat {
+        guard let data = defaults.data(forKey: Keys.captureFormat),
+              let stored = try? JSONDecoder().decode(CaptureFormat.self, from: data) else {
+            return .default
+        }
+        return stored
     }
 }
