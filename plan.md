@@ -35,7 +35,7 @@ Every dispatched subagent must follow these rules. Bake them into the dispatch p
 
 | Phase | Title | Status | Owner | Branch |
 |------:|-------|--------|-------|--------|
-| 0 | Foundation reset | ⬜ not started | — | — |
+| 0 | Foundation reset | 🟢 done | — | `phase-0-foundation` |
 | 1 | Perfect the capture moment | ⬜ blocked on 0 | — | — |
 | 2 | Stack & post-capture UX | ⬜ blocked on 1 | — | — |
 | 3 | Differentiator features | ⬜ blocked on 2 | — | — |
