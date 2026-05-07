@@ -57,6 +57,13 @@ final class PreviewPresenter {
         previewWindows[itemID] = nil
     }
 
+    /// True when `window` is one of the open preview/annotation windows.
+    /// Consulted by the stack presenter so auto-hide pauses while the user
+    /// is editing.
+    func isPreviewWindow(_ window: NSWindow) -> Bool {
+        previewWindows.values.contains(window)
+    }
+
     func delete(_ item: CaptureItem) {
         do {
             try captureStore.delete(item)

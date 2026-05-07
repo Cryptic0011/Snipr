@@ -98,10 +98,13 @@ final class WindowCoordinator {
     }
 
     func showThumbnailStack() { stackPresenter.show() }
+    /// Hotkey path: restore even if the user pinned the stack closed.
+    func showThumbnailStackForced() { stackPresenter.forceShow() }
     func hideThumbnailStack() { stackPresenter.hide() }
     func setThumbnailStackPinned(_ pinned: Bool) { stackPresenter.setPinned(pinned) }
     func setThumbnailStackHovering(_ hovered: Bool) { stackPresenter.setHovering(hovered) }
     var isThumbnailStackPinned: Bool { stackPresenter.isPinned }
+    var isThumbnailStackExpanded: Bool { stackPresenter.isExpanded }
 
     func openPreview(for item: CaptureItem) { previewPresenter.openPreview(for: item) }
     func copy(_ item: CaptureItem) { ImageTransfer.copy(item) }
@@ -170,6 +173,9 @@ final class WindowCoordinator {
         previewPresenter.onPreviewOpened = { [weak self] in
             guard let self, self.stackPresenter.shouldHideAfterPreview else { return }
             self.hideThumbnailStack()
+        }
+        stackPresenter.isPreviewWindow = { [weak self] window in
+            self?.previewPresenter.isPreviewWindow(window) ?? false
         }
         previewPresenter.onError = { error in NSAlert(error: error).runModal() }
         captureFlowPresenter.onError = { error in NSAlert(error: error).runModal() }

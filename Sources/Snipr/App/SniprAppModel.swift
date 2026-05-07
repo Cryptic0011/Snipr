@@ -62,7 +62,7 @@ final class SniprAppModel {
         case .hideStack:
             coordinator.hideThumbnailStack()
         case .showStack:
-            coordinator.showThumbnailStack()
+            coordinator.showThumbnailStackForced()
         case .clearStack:
             coordinator.clearStack()
         }
