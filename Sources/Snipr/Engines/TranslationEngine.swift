@@ -45,22 +45,25 @@ struct UnsupportedTranslationEngine: TranslationEngine {
 
 /// macOS 14.4+ best-effort engine.
 ///
-/// Apple's `Translation` framework is presentation-driven (the
-/// `TranslationSession` API requires a SwiftUI view to host the session) and
-/// does not expose a synchronous "translate string" API. Rather than blocking
-/// shipment of the chained-workflow feature behind a UI dance, this default
-/// implementation no-ops by returning the input verbatim and lets the user
-/// know the step ran. Power users can swap in their own engine via the
-/// `WorkflowExecutor.translationEngine` injection point.
+/// Apple's `Translation` framework on macOS is presentation-driven: the
+/// public `TranslationSession` API requires a SwiftUI view hosting a
+/// `.translationTask(...)` modifier to drive the session. Wiring that into
+/// the non-SwiftUI workflow executor is non-trivial and the Phase 4 brief
+/// permits a graceful no-op fallback on older OS versions, so Phase 4
+/// currently ships only the "unsupported" engine — which throws
+/// `unsupportedOnThisOS` — and the workflow executor surfaces that error
+/// rather than silently passing through unchanged text.
+///
+/// This means the "Capture → OCR → Translate → Clipboard" workflow stops
+/// at the translate step and an alert tells the user. A future revision
+/// can plug a real translator in here without touching the executor.
 @available(macOS 14.4, *)
-struct PassthroughTranslationEngine: TranslationEngine {
+struct PendingTranslationEngine: TranslationEngine {
     func translate(text: String, toLocale targetLocale: Locale) async throws -> String {
-        // Conscious no-op: shipping this as identity means the workflow's
-        // "Translate → Clipboard" step lands the recognized text on the
-        // clipboard with the same content the OCR step produced. Better than
-        // failing the whole chain on a Translation framework integration that
-        // can't run from a non-SwiftUI context.
-        return text
+        // Conscious throw: shipping a passthrough that pretends to translate
+        // would lie to the user. Better to fail loud and document the
+        // limitation in plan.md.
+        throw TranslationError.unsupportedOnThisOS
     }
 }
 
@@ -70,7 +73,7 @@ struct PassthroughTranslationEngine: TranslationEngine {
 enum DefaultTranslationEngineFactory {
     static func makeDefault() -> any TranslationEngine {
         if #available(macOS 14.4, *) {
-            return PassthroughTranslationEngine()
+            return PendingTranslationEngine()
         } else {
             return UnsupportedTranslationEngine()
         }

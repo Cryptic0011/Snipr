@@ -119,11 +119,26 @@ final class WorkflowExecutorTests: XCTestCase {
         XCTAssertEqual(workflows[2].steps, [.capture, .pin])
     }
 
-    func testTranslationPassthroughEngineReturnsInputUnchanged() async throws {
+    func testTranslationPendingEngineThrowsOnAllOSes() async {
+        // The Phase 4 implementation explicitly does not silently pass the
+        // text through unchanged on macOS 14.4+ — there is no translation
+        // happening behind the API yet, so the engine throws and the
+        // executor short-circuits the rest of the workflow.
         guard #available(macOS 14.4, *) else { return }
-        let engine = PassthroughTranslationEngine()
-        let result = try await engine.translate(text: "hello", toLocale: Locale(identifier: "es-ES"))
-        XCTAssertEqual(result, "hello")
+        let engine = PendingTranslationEngine()
+        do {
+            _ = try await engine.translate(text: "hello", toLocale: Locale(identifier: "es-ES"))
+            XCTFail("expected throw — translation backend is not yet wired")
+        } catch let error as TranslationError {
+            switch error {
+            case .unsupportedOnThisOS:
+                break
+            case .failed:
+                XCTFail("expected unsupportedOnThisOS")
+            }
+        } catch {
+            XCTFail("unexpected error type: \(error)")
+        }
     }
 
     func testUnsupportedTranslationEngineThrows() async {

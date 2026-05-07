@@ -25,6 +25,12 @@ extension Workflow {
     /// the UI.
     @MainActor
     static var builtIns: [Workflow] {
+        // Phase 4 ships two end-to-end working workflows plus the translate
+        // workflow flagged as `unsupported` until a real Translation
+        // framework integration replaces the placeholder engine. The
+        // unsupported workflow is intentionally still surfaced so users
+        // see the planned shape; selecting it surfaces an error from the
+        // executor rather than silently no-op'ing.
         [
             Workflow(
                 id: "snipr.workflow.capture-ocr-clipboard",
@@ -34,8 +40,8 @@ extension Workflow {
             ),
             Workflow(
                 id: "snipr.workflow.capture-ocr-translate-clipboard",
-                title: "Capture → OCR → Translate → Clipboard",
-                subtitle: "OCR the region and translate to the system locale",
+                title: "Capture → OCR → Translate → Clipboard (preview)",
+                subtitle: "OCR + translate to system locale — pending Translation framework wiring",
                 steps: [
                     .capture,
                     .ocr,

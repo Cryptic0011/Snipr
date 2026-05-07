@@ -39,10 +39,14 @@ Every dispatched subagent must follow these rules. Bake them into the dispatch p
 | 1 | Perfect the capture moment | 🟢 done | — | `phase-1-capture-moment` |
 | 2 | Stack & post-capture UX | 🟢 done | — | `phase-2-stack-ux` |
 | 3 | Differentiator features | 🟢 done | — | `phase-3-differentiators` |
-| 4 | Power features | 🟢 done | — | `phase-4-power` |
+| 4 | Power features | 🟢 done* | — | `phase-4-power` |
 | 5 | Distribution | ⬜ blocked on 4 | — | — |
 
 Legend: ⬜ not started · 🟡 in progress · 🟢 done · 🔴 blocked
+
+\* **Phase 4 caveats** (intentional punts surfaced in commits, not regressions):
+- Translate workflow step throws `unsupportedOnThisOS` on every macOS — Apple's `Translation` framework on macOS is presentation-driven (`TranslationSession` requires a SwiftUI host) and was not wired in Phase 4. The "Capture → OCR → Translate → Clipboard" workflow is registered in the palette as a `(preview)` entry; selecting it surfaces an alert. A future revision plugs a real translator into `PendingTranslationEngine` without touching the executor.
+- Scrolling-capture seam quality on Safari / VS Code / Notion was not verified from the agent session — only the row-correlation kernel against programmatic gradients. The kernel intentionally throws `allFramesRejected` rather than fabricate visible seams.
 
 ---
 

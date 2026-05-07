@@ -39,6 +39,10 @@ final class CoordinatorWorkflowEnvironment: WorkflowEnvironment {
             coordinator.overlayPresenter.onSelectionComplete = { [weak self] _, displayID, screen, rect in
                 Task { @MainActor in
                     guard let self else { continuation.resume(returning: nil); return }
+                    // Same teardown delay as `CaptureFlowPresenter` —
+                    // without it the overlay panel can still be on screen
+                    // when SCK samples pixels and would land in the shot.
+                    try? await Task.sleep(nanoseconds: 120_000_000)
                     do {
                         let image = try await self.captureEngine.capture(
                             displayID: displayID,
