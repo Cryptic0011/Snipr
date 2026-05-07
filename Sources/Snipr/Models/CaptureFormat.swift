@@ -47,9 +47,3 @@ enum CaptureFormat: Sendable, Equatable, Codable {
     }
 }
 
-extension NSPasteboard.PasteboardType {
-    /// `public.png` UTI as an `NSPasteboard.PasteboardType`. Standard library
-    /// only exposes `.tiff` and `.pdf` etc. by name — every other UTI we want
-    /// to write goes through string init.
-    static let png = NSPasteboard.PasteboardType("public.png")
-}

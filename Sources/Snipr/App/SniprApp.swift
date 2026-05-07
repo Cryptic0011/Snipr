@@ -126,6 +126,42 @@ final class SniprAppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+/// Settings UI helper. The picker needs a `Hashable & CaseIterable` choice;
+/// `CaptureFormat` carries quality so we wrap it in a tagged enum just for
+/// presentation. Quality picks the format-default (0.85) when the user
+/// switches.
+private enum CaptureFormatChoice: String, Hashable, CaseIterable, Identifiable {
+    case png
+    case jpeg
+    case heic
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .png: "PNG"
+        case .jpeg: "JPEG"
+        case .heic: "HEIC"
+        }
+    }
+
+    var format: CaptureFormat {
+        switch self {
+        case .png: .png
+        case .jpeg: .jpeg(quality: 0.85)
+        case .heic: .heic(quality: 0.85)
+        }
+    }
+
+    init(format: CaptureFormat) {
+        switch format {
+        case .png: self = .png
+        case .jpeg: self = .jpeg
+        case .heic: self = .heic
+        }
+    }
+}
+
 struct SettingsView: View {
     let model: SniprAppModel
 
@@ -183,6 +219,45 @@ struct SettingsView: View {
                 Button("Reset Stack Defaults") {
                     model.preferences.resetStackDefaults()
                 }
+            }
+
+            Section("Capture") {
+                Toggle("Copy to clipboard on capture", isOn: Binding(
+                    get: { model.preferences.copyToClipboardOnCapture },
+                    set: { model.preferences.copyToClipboardOnCapture = $0 }
+                ))
+
+                Toggle("Save to disk", isOn: Binding(
+                    get: { model.preferences.saveToDiskOnCapture },
+                    set: { model.preferences.saveToDiskOnCapture = $0 }
+                ))
+
+                LabeledContent("Format") {
+                    Picker("Format", selection: Binding(
+                        get: { CaptureFormatChoice(format: model.preferences.captureFormat) },
+                        set: { model.preferences.captureFormat = $0.format }
+                    )) {
+                        ForEach(CaptureFormatChoice.allCases) { choice in
+                            Text(choice.title).tag(choice)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 240)
+                }
+
+                LabeledContent("Filename Template") {
+                    TextField("Template", text: Binding(
+                        get: { model.preferences.captureFilenameTemplate },
+                        set: { model.preferences.captureFilenameTemplate = $0 }
+                    ))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(minWidth: 240)
+                }
+
+                Text("Tokens: {date}, {time}, {app}, {window}, {w}, {h}, {seq}")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             HotKeysSettingsSection(model: model)

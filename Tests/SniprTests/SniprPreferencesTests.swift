@@ -95,6 +95,36 @@ final class SniprPreferencesTests: XCTestCase {
         XCTAssertEqual(preferences.binding(for: .captureArea), HotKeyDefaults.bindings[.captureArea])
     }
 
+    @MainActor
+    func testCapturePreferenceDefaults() throws {
+        let (defaults, suiteName) = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let preferences = SniprPreferences(defaults: defaults)
+        XCTAssertTrue(preferences.copyToClipboardOnCapture)
+        XCTAssertTrue(preferences.saveToDiskOnCapture)
+        XCTAssertEqual(preferences.captureFormat, .png)
+        XCTAssertEqual(preferences.captureFilenameTemplate, "Snipr {date} {time}")
+    }
+
+    @MainActor
+    func testCapturePreferencesPersistAndReload() throws {
+        let (defaults, suiteName) = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let preferences = SniprPreferences(defaults: defaults)
+        preferences.copyToClipboardOnCapture = false
+        preferences.saveToDiskOnCapture = false
+        preferences.captureFormat = .jpeg(quality: 0.7)
+        preferences.captureFilenameTemplate = "{app} {date}"
+
+        let reloaded = SniprPreferences(defaults: defaults)
+        XCTAssertFalse(reloaded.copyToClipboardOnCapture)
+        XCTAssertFalse(reloaded.saveToDiskOnCapture)
+        XCTAssertEqual(reloaded.captureFormat, .jpeg(quality: 0.7))
+        XCTAssertEqual(reloaded.captureFilenameTemplate, "{app} {date}")
+    }
+
     private func makeDefaults() throws -> (UserDefaults, String) {
         let suiteName = "SniprPreferencesTests-\(UUID().uuidString)"
         return (try XCTUnwrap(UserDefaults(suiteName: suiteName)), suiteName)
