@@ -328,20 +328,22 @@ private struct ExpandedSidebar: View {
         activeItems().filter { $0.mediaType == .image }
     }
 
-    /// URLs dragged out when the user begins a drag from `item`. Selection
-    /// wins if the dragged row is part of it; lone drags carry just the
-    /// dragged item; empty selection on a non-selected row drags everything
-    /// visible so the user can fling the entire stack into Discord.
+    /// URLs dragged out when the user begins a drag from `item`.
+    ///
+    /// Per the Phase 2 brief: drag carries the selection if any, else all
+    /// visible items so the user can fling the entire stack into Discord
+    /// without first multi-selecting. If a drag fires on a row outside the
+    /// current selection, that one row wins.
     private func dragURLs(triggeredBy item: CaptureItem) -> [URL] {
-        if !selection.isEmpty, selection.contains(item.id) {
-            // Preserve the displayed order so dropped files land in the
-            // same sequence the user sees.
-            return store.items.filter { selection.contains($0.id) }.map(\.fileURL)
-        }
-        if selection.isEmpty {
+        if !selection.isEmpty {
+            if selection.contains(item.id) {
+                // Preserve the displayed order so dropped files land in
+                // the same sequence the user sees.
+                return store.items.filter { selection.contains($0.id) }.map(\.fileURL)
+            }
             return [item.fileURL]
         }
-        return [item.fileURL]
+        return store.items.map(\.fileURL)
     }
 
     // MARK: Batch actions
@@ -422,18 +424,13 @@ private struct SidebarRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            ZStack(alignment: .topLeading) {
-                MediaThumbnailView(
-                    item: item,
-                    size: CGSize(width: 92, height: 60),
-                    cornerRadius: 4
-                )
-                .background(Color.black.opacity(0.45))
-                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-
-                MultiFileDragView(urlsProvider: dragURLs)
-                    .frame(width: 92, height: 60)
-            }
+            MediaThumbnailView(
+                item: item,
+                size: CGSize(width: 92, height: 60),
+                cornerRadius: 4
+            )
+            .background(Color.black.opacity(0.45))
+            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.filename)
@@ -452,6 +449,22 @@ private struct SidebarRow: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Dedicated drag handle. Living here keeps SwiftUI tap
+            // gestures owning the thumbnail/labels (single/double click
+            // still select and open the preview), while the user has a
+            // visible grip to fling the selection out into Finder, Slack,
+            // or Discord.
+            ZStack {
+                Image(systemName: "square.grid.3x1.below.line.grid.1x2")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .frame(width: 22, height: 36)
+                    .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
+                MultiFileDragView(urlsProvider: dragURLs)
+                    .frame(width: 22, height: 36)
+            }
+            .help("Drag to copy out — multi-select to drag many")
         }
         .padding(8)
         .background(rowBackground)
