@@ -21,6 +21,8 @@ final class WindowCoordinator {
 
     let ocrHistory: OCRHistoryStore
     let pinPresenter: PinPresenter
+    let translationEngine: any TranslationEngine
+    let ocrEngine: any OCREngine
 
     init(
         captureStore: CaptureStore,
@@ -28,12 +30,15 @@ final class WindowCoordinator {
         captureEngine: CaptureEngine,
         recordingEngine: RecordingEngine,
         ocrEngine: any OCREngine,
-        ocrHistory: OCRHistoryStore
+        ocrHistory: OCRHistoryStore,
+        translationEngine: (any TranslationEngine)? = nil
     ) {
         self.captureStore = captureStore
         self.preferences = preferences
         self.captureEngine = captureEngine
         self.ocrHistory = ocrHistory
+        self.ocrEngine = ocrEngine
+        self.translationEngine = translationEngine ?? DefaultTranslationEngineFactory.makeDefault()
         self.pinPresenter = PinPresenter()
         self.overlayPresenter = OverlayPresenter()
         self.stackPresenter = StackPresenter(captureStore: captureStore, preferences: preferences)
@@ -235,6 +240,33 @@ final class WindowCoordinator {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    /// Restore the default overlay handlers after a workflow temporarily
+    /// retargeted them. Workflows borrow the selection overlay for the
+    /// `capture` step; once the user commits or cancels we hand the overlay
+    /// back to the regular capture/recording/OCR routing here.
+    func rewireOverlayHandlers() {
+        wirePresenters()
+    }
+
+    func runWorkflow(_ workflow: Workflow) {
+        let environment = CoordinatorWorkflowEnvironment(
+            coordinator: self,
+            captureEngine: captureEngine,
+            ocrEngine: ocrEngine,
+            translationEngine: translationEngine,
+            captureStore: captureStore,
+            preferences: preferences
+        )
+        let executor = WorkflowExecutor(environment: environment)
+        Task { @MainActor [weak self] in
+            do {
+                _ = try await executor.run(workflow)
+            } catch {
+                self?.captureFlowPresenter.onError?(error)
+            }
+        }
+    }
+
     private func wirePresenters() {
         overlayPresenter.onSelectionComplete = { [weak self] mode, displayID, screen, rect in
             self?.handleSelection(mode: mode, displayID: displayID, screen: screen, rect: rect)
@@ -247,6 +279,7 @@ final class WindowCoordinator {
                 appName: entry.appName
             )
         }
+        overlayPresenter.onCancel = nil
         stackPresenter.contentProvider = { [weak self] in
             guard let self else { return AnyView(EmptyView()) }
             return AnyView(ThumbnailStackView(store: self.captureStore, coordinator: self))

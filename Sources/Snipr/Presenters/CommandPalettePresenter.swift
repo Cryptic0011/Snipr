@@ -40,10 +40,16 @@ final class CommandPalettePresenter {
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = true
         panel.contentView = NSHostingView(
-            rootView: CommandPaletteView { [weak self, weak coordinator] command in
-                self?.hide()
-                coordinator?.execute(command)
-            }
+            rootView: CommandPaletteView(
+                onExecute: { [weak self, weak coordinator] command in
+                    self?.hide()
+                    coordinator?.execute(command)
+                },
+                onExecuteWorkflow: { [weak self, weak coordinator] workflow in
+                    self?.hide()
+                    coordinator?.runWorkflow(workflow)
+                }
+            )
         )
 
         if let screen = NSScreen.main {

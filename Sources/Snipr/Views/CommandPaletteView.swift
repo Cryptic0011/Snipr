@@ -3,11 +3,35 @@ import SwiftUI
 struct CommandPaletteView: View {
     @State private var query = ""
     @State private var selectedCommandID: SniprCommandID = .captureArea
+    @State private var selectedWorkflowID: String?
 
     let onExecute: (SniprCommand) -> Void
+    let onExecuteWorkflow: (Workflow) -> Void
+
+    /// Workflows surfaced under their own section. Defaults to the
+    /// Phase 4 built-in trio; tests can supply their own.
+    let workflows: [Workflow]
+
+    init(
+        workflows: [Workflow] = Workflow.builtIns,
+        onExecute: @escaping (SniprCommand) -> Void,
+        onExecuteWorkflow: @escaping (Workflow) -> Void = { _ in }
+    ) {
+        self.workflows = workflows
+        self.onExecute = onExecute
+        self.onExecuteWorkflow = onExecuteWorkflow
+    }
 
     private var commands: [SniprCommand] {
         SniprCommand.filtered(by: query)
+    }
+
+    private var filteredWorkflows: [Workflow] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty else { return workflows }
+        return workflows.filter { workflow in
+            "\(workflow.title) \(workflow.subtitle)".lowercased().contains(trimmed)
+        }
     }
 
     var body: some View {
@@ -28,18 +52,34 @@ struct CommandPaletteView: View {
             Divider()
                 .overlay(Color.white.opacity(0.08))
 
-            if commands.isEmpty {
+            if commands.isEmpty && filteredWorkflows.isEmpty {
                 ContentUnavailableView("No Commands", systemImage: "command", description: Text("Try a different search."))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List(selection: $selectedCommandID) {
-                    ForEach(commands) { command in
-                        CommandPaletteRow(command: command)
-                            .tag(command.id)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                onExecute(command)
+                    if !commands.isEmpty {
+                        Section("Commands") {
+                            ForEach(commands) { command in
+                                CommandPaletteRow(command: command)
+                                    .tag(command.id)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        onExecute(command)
+                                    }
                             }
+                        }
+                    }
+
+                    if !filteredWorkflows.isEmpty {
+                        Section("Workflows") {
+                            ForEach(filteredWorkflows) { workflow in
+                                WorkflowPaletteRow(workflow: workflow)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        onExecuteWorkflow(workflow)
+                                    }
+                            }
+                        }
                     }
                 }
                 .listStyle(.plain)
@@ -61,6 +101,39 @@ struct CommandPaletteView: View {
                 onExecute(command)
             }
         }
+    }
+}
+
+private struct WorkflowPaletteRow: View {
+    let workflow: Workflow
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "rectangle.stack.fill.badge.plus")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(.purple)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(workflow.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+
+                Text(workflow.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.52))
+            }
+
+            Spacer()
+
+            Text("Workflow")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.45))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+        }
+        .padding(.vertical, 8)
     }
 }
 
