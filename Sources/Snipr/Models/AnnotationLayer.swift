@@ -2,11 +2,16 @@ import AppKit
 import Foundation
 import SwiftUI
 
-enum AnnotationTool: String, CaseIterable, Identifiable {
+enum AnnotationKind: String, CaseIterable, Identifiable {
     case arrow
     case rectangle
     case ellipse
     case blur
+    case text
+    case step
+    case highlight
+    case pixelate
+    case crop
 
     var id: String { rawValue }
 
@@ -20,6 +25,16 @@ enum AnnotationTool: String, CaseIterable, Identifiable {
             "Circle"
         case .blur:
             "Blur"
+        case .text:
+            "Text"
+        case .step:
+            "Step"
+        case .highlight:
+            "Highlight"
+        case .pixelate:
+            "Pixelate"
+        case .crop:
+            "Crop"
         }
     }
 
@@ -33,6 +48,16 @@ enum AnnotationTool: String, CaseIterable, Identifiable {
             "circle"
         case .blur:
             "drop.degreesign.slash"
+        case .text:
+            "textformat"
+        case .step:
+            "1.circle.fill"
+        case .highlight:
+            "highlighter"
+        case .pixelate:
+            "square.grid.3x3.fill"
+        case .crop:
+            "crop"
         }
     }
 }
@@ -68,26 +93,38 @@ enum AnnotationInk: String, CaseIterable, Identifiable {
 
 struct AnnotationLayer: Identifiable, Equatable {
     let id: UUID
-    var tool: AnnotationTool
+    var kind: AnnotationKind
     var start: CGPoint
     var end: CGPoint
     var ink: AnnotationInk
     var lineWidth: CGFloat
+    /// User-supplied text content (used by Text and Step tools).
+    var text: String
+    /// Step number (used by Step tool).
+    var stepNumber: Int
+    /// Font size (used by Text tool).
+    var fontSize: CGFloat
 
     init(
         id: UUID = UUID(),
-        tool: AnnotationTool,
+        kind: AnnotationKind,
         start: CGPoint,
         end: CGPoint,
         ink: AnnotationInk,
-        lineWidth: CGFloat = 5
+        lineWidth: CGFloat = 5,
+        text: String = "",
+        stepNumber: Int = 1,
+        fontSize: CGFloat = 28
     ) {
         self.id = id
-        self.tool = tool
+        self.kind = kind
         self.start = start
         self.end = end
         self.ink = ink
         self.lineWidth = lineWidth
+        self.text = text
+        self.stepNumber = stepNumber
+        self.fontSize = fontSize
     }
 
     var bounds: CGRect {

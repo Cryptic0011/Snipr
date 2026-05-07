@@ -22,13 +22,13 @@ final class AnnotationRendererTests: XCTestCase {
 
         let annotations = [
             AnnotationLayer(
-                tool: .arrow,
+                kind: .arrow,
                 start: CGPoint(x: 10, y: 10),
                 end: CGPoint(x: 70, y: 50),
                 ink: .red
             ),
             AnnotationLayer(
-                tool: .blur,
+                kind: .blur,
                 start: CGPoint(x: 20, y: 15),
                 end: CGPoint(x: 44, y: 34),
                 ink: .white

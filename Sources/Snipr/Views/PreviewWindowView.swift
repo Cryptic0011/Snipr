@@ -4,11 +4,13 @@ struct PreviewWindowView: View {
     let item: CaptureItem
     let coordinator: WindowCoordinator
 
-    @State private var selectedTool: AnnotationTool = .arrow
+    @State private var selectedTool: AnnotationKind = .arrow
     @State private var selectedInk: AnnotationInk = .red
     @State private var lineWidth: CGFloat = 5
     @State private var annotations: [AnnotationLayer] = []
     @State private var draftAnnotation: AnnotationLayer?
+    @State private var pendingTextDraft: AnnotationLayer?
+    @State private var pendingTextString: String = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -56,13 +58,13 @@ struct PreviewWindowView: View {
                 .frame(height: 22)
 
             Picker("Tool", selection: $selectedTool) {
-                ForEach(AnnotationTool.allCases) { tool in
+                ForEach(AnnotationKind.allCases) { tool in
                     Label(tool.title, systemImage: tool.systemImage)
                         .tag(tool)
                 }
             }
             .pickerStyle(.segmented)
-            .frame(width: 300)
+            .frame(width: 460)
 
             HStack(spacing: 6) {
                 ForEach(AnnotationInk.allCases) { ink in
@@ -184,7 +186,7 @@ struct PreviewWindowView: View {
 private struct AnnotationCanvasView: View {
     let image: NSImage
     let containerSize: CGSize
-    let selectedTool: AnnotationTool
+    let selectedTool: AnnotationKind
     let selectedInk: AnnotationInk
     let lineWidth: CGFloat
     let annotations: [AnnotationLayer]
@@ -206,7 +208,7 @@ private struct AnnotationCanvasView: View {
                 .scaledToFit()
                 .frame(width: containerSize.width, height: containerSize.height)
 
-            ForEach(annotations.filter { $0.tool == .blur }) { annotation in
+            ForEach(annotations.filter { $0.kind == .blur }) { annotation in
                 BlurPreviewLayer(
                     image: image,
                     containerSize: containerSize,
@@ -216,7 +218,7 @@ private struct AnnotationCanvasView: View {
                 )
             }
 
-            if let draftAnnotation, draftAnnotation.tool == .blur {
+            if let draftAnnotation, draftAnnotation.kind == .blur {
                 BlurPreviewLayer(
                     image: image,
                     containerSize: containerSize,
@@ -265,12 +267,19 @@ private struct AnnotationCanvasView: View {
                     return
                 }
 
+                let ink: AnnotationInk
+                switch selectedTool {
+                case .blur, .pixelate, .crop:
+                    ink = .white
+                default:
+                    ink = selectedInk
+                }
                 onDraftChanged(
                     AnnotationLayer(
-                        tool: selectedTool,
+                        kind: selectedTool,
                         start: start,
                         end: end,
-                        ink: selectedTool == .blur ? .white : selectedInk,
+                        ink: ink,
                         lineWidth: lineWidth
                     )
                 )
@@ -310,7 +319,7 @@ private struct AnnotationCanvasView: View {
         let opacity = isDraft ? 0.74 : 1.0
         let stroke = StrokeStyle(lineWidth: annotation.lineWidth, lineCap: .round, lineJoin: .round)
 
-        switch annotation.tool {
+        switch annotation.kind {
         case .arrow:
             var path = Path()
             path.move(to: start)
@@ -321,10 +330,33 @@ private struct AnnotationCanvasView: View {
             context.stroke(Path(bounds), with: .color(annotation.ink.color.opacity(opacity)), style: stroke)
         case .ellipse:
             context.stroke(Path(ellipseIn: bounds), with: .color(annotation.ink.color.opacity(opacity)), style: stroke)
-        case .blur:
-            let blurFill = Color.white.opacity(isDraft ? 0.04 : 0.06)
-            context.fill(Path(roundedRect: bounds, cornerRadius: 8), with: .color(blurFill))
+        case .blur, .pixelate:
+            let fill = Color.white.opacity(isDraft ? 0.04 : 0.06)
+            context.fill(Path(roundedRect: bounds, cornerRadius: 8), with: .color(fill))
             context.stroke(Path(roundedRect: bounds, cornerRadius: 8), with: .color(.white.opacity(0.56)), style: StrokeStyle(lineWidth: 2, dash: [6, 5]))
+        case .highlight:
+            context.fill(Path(bounds), with: .color(annotation.ink.color.opacity(0.40)))
+        case .crop:
+            context.stroke(Path(bounds), with: .color(.yellow.opacity(opacity)), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+        case .text:
+            if !annotation.text.isEmpty {
+                let resolved = context.resolve(Text(annotation.text)
+                    .font(.system(size: annotation.fontSize, weight: .semibold))
+                    .foregroundColor(annotation.ink.color.opacity(opacity)))
+                context.draw(resolved, at: start, anchor: .bottomLeading)
+            } else if isDraft {
+                context.stroke(Path(roundedRect: CGRect(x: start.x, y: start.y - annotation.fontSize, width: 80, height: annotation.fontSize), cornerRadius: 4), with: .color(.white.opacity(0.5)), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            }
+        case .step:
+            let radius = max(14, annotation.lineWidth * 3)
+            let circle = CGRect(x: start.x - radius, y: start.y - radius, width: radius * 2, height: radius * 2)
+            context.fill(Path(ellipseIn: circle), with: .color(annotation.ink.color.opacity(opacity)))
+            context.stroke(Path(ellipseIn: circle), with: .color(.white), lineWidth: 2)
+            let label = Text("\(annotation.stepNumber)")
+                .font(.system(size: radius, weight: .bold))
+                .foregroundColor(.white)
+            let resolved = context.resolve(label)
+            context.draw(resolved, at: start, anchor: .center)
         }
     }
 
