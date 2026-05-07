@@ -83,25 +83,25 @@ final class StackPresenter {
     }
 
     func setHovering(_ hovered: Bool) {
+        // SwiftUI fires a spurious `.onHover(false)` while the panel is
+        // resizing between pile/expanded states, even when the cursor never
+        // leaves. Reject it if the cursor is still inside the panel frame.
+        let effective = hovered || cursorIsInsidePanel
         let wasHovered = isHovered
-        isHovered = hovered
-        if hovered != isExpanded {
-            setExpanded(hovered)
+        isHovered = effective
+        if effective != isExpanded {
+            setExpanded(effective)
         }
 
         guard preferences.pauseStackAutoHideOnHover, preferences.autoHideStack, !isPinned else {
             return
         }
 
-        if hovered {
+        if effective {
             thumbnailHideTask?.cancel()
             thumbnailHideTask = nil
         } else if wasHovered {
-            // SwiftUI delivers an `.onHover(false)` on initial appear when
-            // the cursor isn't over the view. Only collapse with the short
-            // post-hover delay if we were actually hovered first; otherwise
-            // the original `present()` schedule (using the full preference
-            // delay) keeps running.
+            // True hover-out (we were hovered, cursor really has left).
             scheduleAutoHide(delay: 2)
         }
     }
@@ -220,15 +220,30 @@ final class StackPresenter {
         let delay = max(1, explicitDelay ?? preferences.stackAutoHideDelay)
         thumbnailHideTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            // A cancelled Task continues past `try?`, which would otherwise
+            // run `hide()` even though a newer scheduleAutoHide call meant to
+            // replace this one. Bail early on cancellation.
+            if Task.isCancelled { return }
             guard let self,
                   !self.isPinned,
                   !(self.preferences.pauseStackAutoHideOnHover && self.isHovered),
-                  !self.isPreviewWindowKey else {
+                  !self.isPreviewWindowKey,
+                  !self.cursorIsInsidePanel else {
                 return
             }
 
             self.hide()
         }
+    }
+
+    /// True when the cursor is currently inside the stack panel's frame, even
+    /// if SwiftUI's `.onHover` reported a false transition. The expansion
+    /// animation can re-identify the hovered view and deliver a spurious
+    /// `.onHover(false)` while the cursor never actually left.
+    private var cursorIsInsidePanel: Bool {
+        guard let panel = thumbnailPanel else { return false }
+        let mouse = NSEvent.mouseLocation
+        return panel.frame.contains(mouse)
     }
 
     private var isPreviewWindowKey: Bool {
