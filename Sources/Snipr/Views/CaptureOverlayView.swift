@@ -18,7 +18,6 @@ final class CaptureSelectionNSView: NSView {
     private var snapEdgesX: [CGFloat] = []
     private var snapEdgesY: [CGFloat] = []
     private var trackingArea: NSTrackingArea?
-    private var loupeContainer: NSView!
     private var loupe: MagnifierLoupeView!
     private var hexLabel: NSTextField!
     private var coordLabel: NSTextField!
@@ -203,27 +202,24 @@ final class CaptureSelectionNSView: NSView {
 
     private func installLoupe() {
         let dimension = MagnifierLoupeView.dimension
-        let container = FlippedContainerView(frame: NSRect(x: 0, y: 0, width: dimension, height: dimension + 22))
-        container.wantsLayer = true
-        container.isHidden = true
 
         let loupe = MagnifierLoupeView(frame: NSRect(x: 0, y: 0, width: dimension, height: dimension))
+        loupe.isHidden = true
+
         let hexLabel = NSTextField(labelWithString: "—")
         hexLabel.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold)
         hexLabel.textColor = .white
         hexLabel.backgroundColor = NSColor.black.withAlphaComponent(0.72)
         hexLabel.drawsBackground = true
         hexLabel.alignment = .center
-        // Container is flipped (top-left origin). Loupe sits at the top, hex
-        // readout sits 2 px below it. Without the flip the loupe would render
-        // at the *bottom* of the container — visually ~22 px below the cursor.
-        hexLabel.frame = NSRect(x: 0, y: dimension + 2, width: dimension, height: 18)
+        hexLabel.isHidden = true
 
-        container.addSubview(loupe)
-        container.addSubview(hexLabel)
+        // Add loupe and hex label directly to the flipped overlay so each owns
+        // its own frame in the parent's coordinate space — no nested
+        // unflipped/flipped container to invert their positions.
+        addSubview(loupe)
+        addSubview(hexLabel)
 
-        addSubview(container)
-        loupeContainer = container
         self.loupe = loupe
         self.hexLabel = hexLabel
     }
@@ -244,16 +240,32 @@ final class CaptureSelectionNSView: NSView {
         loupe.cursorPoint = point
         hexLabel.stringValue = loupe.hexReadout
         let offset: CGFloat = 12
-        var origin = CGPoint(x: point.x + offset, y: point.y + offset)
-        let size = loupeContainer.frame.size
-        if origin.x + size.width > bounds.maxX {
-            origin.x = point.x - offset - size.width
+        let dim = MagnifierLoupeView.dimension
+        let labelHeight: CGFloat = 18
+        let labelGap: CGFloat = 2
+
+        // Place the loupe directly at cursor + offset.
+        var loupeOrigin = CGPoint(x: point.x + offset, y: point.y + offset)
+        if loupeOrigin.x + dim > bounds.maxX {
+            loupeOrigin.x = point.x - offset - dim
         }
-        if origin.y + size.height > bounds.maxY {
-            origin.y = point.y - offset - size.height
+        if loupeOrigin.y + dim + labelGap + labelHeight > bounds.maxY {
+            loupeOrigin.y = point.y - offset - dim - labelGap - labelHeight
         }
-        loupeContainer.frame = NSRect(origin: origin, size: size)
-        loupeContainer.isHidden = false
+        loupe.frame = NSRect(origin: loupeOrigin, size: NSSize(width: dim, height: dim))
+
+        // Hex label sits just below the loupe, sized to fit the readout.
+        hexLabel.sizeToFit()
+        let labelWidth = max(dim, hexLabel.frame.width + 8)
+        hexLabel.frame = NSRect(
+            x: loupeOrigin.x + (dim - labelWidth) / 2,
+            y: loupeOrigin.y + dim + labelGap,
+            width: labelWidth,
+            height: labelHeight
+        )
+
+        loupe.isHidden = false
+        hexLabel.isHidden = false
     }
 
     private func updateCoordReadout(at point: CGPoint) {
@@ -326,9 +338,3 @@ struct CaptureOverlayView: NSViewRepresentable {
     }
 }
 
-/// `NSView` subclass with `isFlipped = true` so child positions are
-/// interpreted top-down. Used as the loupe container so its `frame.origin`
-/// matches the surrounding flipped capture overlay coordinate space.
-private final class FlippedContainerView: NSView {
-    override var isFlipped: Bool { true }
-}
