@@ -83,6 +83,7 @@ final class StackPresenter {
     }
 
     func setHovering(_ hovered: Bool) {
+        let wasHovered = isHovered
         isHovered = hovered
         if hovered != isExpanded {
             setExpanded(hovered)
@@ -95,7 +96,12 @@ final class StackPresenter {
         if hovered {
             thumbnailHideTask?.cancel()
             thumbnailHideTask = nil
-        } else {
+        } else if wasHovered {
+            // SwiftUI delivers an `.onHover(false)` on initial appear when
+            // the cursor isn't over the view. Only collapse with the short
+            // post-hover delay if we were actually hovered first; otherwise
+            // the original `present()` schedule (using the full preference
+            // delay) keeps running.
             scheduleAutoHide(delay: 2)
         }
     }
