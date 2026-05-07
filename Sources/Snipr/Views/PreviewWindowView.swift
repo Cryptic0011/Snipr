@@ -147,6 +147,14 @@ struct PreviewWindowView: View {
             }
             .help("Save annotated image")
 
+            // Phase 4 quick share: NSSharingServicePicker anchored on this
+            // toolbar. Shares the original file URL — annotation export still
+            // lives behind the explicit "Save annotated image" action above.
+            ShareButton(symbolName: "square.and.arrow.up", helpText: "Share") { [item] in
+                [item.fileURL]
+            }
+            .frame(width: 22, height: 22)
+
             Menu {
                 Button("Reveal Original") {
                     coordinator.reveal(item)

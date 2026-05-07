@@ -505,6 +505,12 @@ private struct SidebarRow: View {
             QuickActionButton(systemImage: "square.and.arrow.down", help: "Save As…") {
                 coordinator.saveAs(item)
             }
+            // Phase 4 quick share: anchored NSSharingServicePicker. No
+            // cloud upload — system picker only.
+            ShareButton(symbolName: "square.and.arrow.up", helpText: "Share") { [item] in
+                [item.fileURL]
+            }
+            .frame(width: 22, height: 18)
             QuickActionButton(systemImage: "folder", help: "Reveal in Finder") {
                 coordinator.reveal(item)
             }
