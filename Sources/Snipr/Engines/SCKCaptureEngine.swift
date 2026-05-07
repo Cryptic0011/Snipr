@@ -4,8 +4,8 @@ import ScreenCaptureKit
 import UniformTypeIdentifiers
 
 /// Default `CaptureEngine` powered by ScreenCaptureKit's `SCScreenshotManager`.
-/// Replaces the deprecated `CGDisplayCreateImage` path. Encoding stays via
-/// `CGImageDestination` so the public `CapturedImage` shape is unchanged.
+/// Encoding stays via `CGImageDestination` so the public `CapturedImage`
+/// shape is unchanged.
 struct SCKCaptureEngine: CaptureEngine {
     func capture(
         displayID: CGDirectDisplayID,

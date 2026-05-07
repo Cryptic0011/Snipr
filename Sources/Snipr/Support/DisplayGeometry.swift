@@ -10,9 +10,9 @@ enum DisplayGeometry {
     /// when `screen.isFlipped`-style consumers use it) into the display's
     /// native pixel coordinate space.
     ///
-    /// Both `ScreenCaptureKit` (`SCStreamConfiguration.sourceRect`) and the
-    /// legacy `CGDisplayCreateImage` rect take pixel coordinates relative to
-    /// the display, so all callers funnel through this one routine.
+    /// `ScreenCaptureKit` (`SCStreamConfiguration.sourceRect`) takes pixel
+    /// coordinates relative to the display, so all callers funnel through
+    /// this one routine.
     static func pixelRect(
         forDisplayPointsRect rect: CGRect,
         displayID: CGDirectDisplayID,

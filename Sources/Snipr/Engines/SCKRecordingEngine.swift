@@ -3,9 +3,8 @@ import AppKit
 import CoreMedia
 import ScreenCaptureKit
 
-/// Default `RecordingEngine` powered by `SCStream` + `AVAssetWriter`. Replaces
-/// the deprecated `AVCaptureScreenInput` pipeline. Audio is intentionally out
-/// of scope for Phase 0 and is added in Phase 3.
+/// Default `RecordingEngine` powered by `SCStream` + `AVAssetWriter`. Audio
+/// is intentionally out of scope for Phase 0 and is added in Phase 3.
 ///
 /// The class is `@MainActor`-isolated so it satisfies the main-actor
 /// `RecordingEngine` protocol. SCK delivers sample buffers on its own queue,
