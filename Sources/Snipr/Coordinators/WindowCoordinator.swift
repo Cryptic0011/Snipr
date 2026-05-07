@@ -3,9 +3,8 @@ import Observation
 import SwiftUI
 
 /// Router that forwards capture / record / preview commands to the appropriate
-/// presenter. Heavy lifting lives in `Presenters/*` and
-/// `WindowCoordinator+Selection.swift`; this file stays small enough to scan
-/// in one screen.
+/// presenter. Heavy lifting lives in `Presenters/*`; this file stays small
+/// enough to scan in one screen.
 @MainActor
 @Observable
 final class WindowCoordinator {
@@ -16,6 +15,7 @@ final class WindowCoordinator {
     let stackPresenter: StackPresenter
     let recordingPresenter: RecordingPresenter
     let previewPresenter: PreviewPresenter
+    let captureFlowPresenter: CaptureFlowPresenter
     private var commandPalettePresenter: CommandPalettePresenter?
     private var captureToolbarPresenter: CaptureToolbarPresenter?
 
@@ -32,6 +32,7 @@ final class WindowCoordinator {
         self.stackPresenter = StackPresenter(captureStore: captureStore, preferences: preferences)
         self.recordingPresenter = RecordingPresenter(recordingEngine: recordingEngine, captureStore: captureStore)
         self.previewPresenter = PreviewPresenter(captureStore: captureStore)
+        self.captureFlowPresenter = CaptureFlowPresenter(captureStore: captureStore, captureEngine: captureEngine)
         wirePresenters()
     }
 
@@ -61,23 +62,23 @@ final class WindowCoordinator {
     }
 
     func startCaptureArea() {
-        guard ensureScreenRecordingAccess() else { return }
+        guard captureFlowPresenter.ensureScreenRecordingAccess() else { return }
         overlayPresenter.showCaptureOverlays(mode: .screenshot)
     }
 
     func startScreenRecordingArea() {
-        guard !recordingPresenter.isRecording, ensureScreenRecordingAccess() else { return }
+        guard !recordingPresenter.isRecording, captureFlowPresenter.ensureScreenRecordingAccess() else { return }
         overlayPresenter.showCaptureOverlays(mode: .recording)
     }
 
     func startCaptureFullScreen() {
-        guard ensureScreenRecordingAccess(),
+        guard captureFlowPresenter.ensureScreenRecordingAccess(),
               let screen = NSScreen.main, let displayID = screen.sniprDisplayID else { return }
-        completeCapture(displayID: displayID, screen: screen, rect: CGRect(origin: .zero, size: screen.frame.size))
+        captureFlowPresenter.completeCapture(displayID: displayID, screen: screen, rect: CGRect(origin: .zero, size: screen.frame.size))
     }
 
     func startScreenRecordingFullScreen() {
-        guard !recordingPresenter.isRecording, ensureScreenRecordingAccess(),
+        guard !recordingPresenter.isRecording, captureFlowPresenter.ensureScreenRecordingAccess(),
               let screen = NSScreen.main, let displayID = screen.sniprDisplayID else { return }
         recordingPresenter.start(displayID: displayID, screen: screen, rect: CGRect(origin: .zero, size: screen.frame.size))
     }
@@ -128,5 +129,45 @@ final class WindowCoordinator {
     func openSettingsWindow() {
         NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func wirePresenters() {
+        overlayPresenter.onSelectionComplete = { [weak self] mode, displayID, screen, rect in
+            self?.handleSelection(mode: mode, displayID: displayID, screen: screen, rect: rect)
+        }
+        stackPresenter.contentProvider = { [weak self] in
+            guard let self else { return AnyView(EmptyView()) }
+            return AnyView(ThumbnailStackView(store: self.captureStore, coordinator: self))
+        }
+        recordingPresenter.onRecordingFinished = { [weak self] in self?.showThumbnailStack() }
+        recordingPresenter.onError = { error in NSAlert(error: error).runModal() }
+        previewPresenter.contentProvider = { [weak self] item in
+            guard let self else { return AnyView(EmptyView()) }
+            return AnyView(PreviewWindowView(item: item, coordinator: self))
+        }
+        previewPresenter.onPreviewOpened = { [weak self] in
+            guard let self, self.stackPresenter.shouldHideAfterPreview else { return }
+            self.hideThumbnailStack()
+        }
+        previewPresenter.onError = { error in NSAlert(error: error).runModal() }
+        captureFlowPresenter.onError = { error in NSAlert(error: error).runModal() }
+        captureFlowPresenter.onCaptureStored = { [weak self] in self?.showThumbnailStack() }
+    }
+
+    private func handleSelection(mode: CaptureOverlayMode, displayID: CGDirectDisplayID, screen: NSScreen, rect: CGRect) {
+        switch mode {
+        case .screenshot:
+            captureFlowPresenter.completeCapture(displayID: displayID, screen: screen, rect: rect)
+        case .recording:
+            recordingPresenter.start(displayID: displayID, screen: screen, rect: rect)
+        }
+    }
+
+    func showWindowCaptureComingSoon() {
+        let alert = NSAlert()
+        alert.messageText = "Window Capture"
+        alert.informativeText = "The toolbar option is in place. Window picking is the next capture mode to wire."
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 }
