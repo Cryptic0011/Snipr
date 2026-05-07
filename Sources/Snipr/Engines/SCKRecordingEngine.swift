@@ -8,13 +8,8 @@ import ScreenCaptureKit
 ///
 /// The class is `@MainActor`-isolated so it satisfies the main-actor
 /// `RecordingEngine` protocol. SCK delivers sample buffers on its own queue,
-/// so we use a private serial dispatch queue and a `@unchecked Sendable`
-/// box for the writer state to bridge them onto the main actor.
-///
-/// reason: the `Box` is `@unchecked Sendable` because `AVAssetWriter` /
-/// `AVAssetWriterInput` are `NSObject`-backed and not statically Sendable,
-/// but we serialize all writer access through the recording queue, which is
-/// the canonical pattern for this kind of CMSampleBuffer pump.
+/// which we serialise through `SCKRecordingState` (see its `@unchecked
+/// Sendable` reason comment for the bridging trade-off).
 @MainActor
 final class SCKRecordingEngine: NSObject, RecordingEngine {
     private let queue = DispatchQueue(label: "com.grayson.snipr.screen-recording")
@@ -157,6 +152,12 @@ final class SCKRecordingEngine: NSObject, RecordingEngine {
         isStreamRunning = false
 
         if let url {
+            // Race note: `AVAssetWriter.cancelWriting()` (run from the queue
+            // task above) also removes its output. Both paths target the
+            // same URL, so the redundant removal is benign — `removeItem`
+            // tolerates an already-missing file. We still fire it
+            // synchronously here so the caller sees a clean disk state
+            // before `cancel()` returns.
             try? FileManager.default.removeItem(at: url)
         }
     }
@@ -200,6 +201,10 @@ private final class SCKStreamOutputAdapter: NSObject, SCStreamOutput, SCStreamDe
 /// `Sendable`, and SCK's delegate-driven CMSampleBuffer pump fundamentally
 /// needs us to bridge them across actor boundaries. Serialised through
 /// `recording-queue`, this is the standard pattern.
+// reason: AVAssetWriter / AVAssetWriterInput aren't statically Sendable
+// (NS_SWIFT_NONSENDABLE), and the SCK delegate-driven CMSampleBuffer pump
+// needs us to bridge them across actor boundaries. All access is serialised
+// through the SCKRecordingEngine.queue dispatch queue.
 private final class SCKRecordingState: @unchecked Sendable {
     private var writer: AVAssetWriter?
     private var writerInput: AVAssetWriterInput?
