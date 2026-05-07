@@ -142,12 +142,17 @@ final class CaptureFlowPresenter {
             }
 
             if preferences.saveToDiskOnCapture {
+                let subfolder = SmartFolderRouter.subfolder(
+                    forAppName: appName,
+                    rules: preferences.smartFolderRules
+                )
                 _ = try captureStore.addCapture(
                     pngData: encoded,
                     pixelSize: captured.pixelSize,
                     displayID: displayID,
                     fileExtension: format.fileExtension,
-                    suggestedFilename: suggestedFilename
+                    suggestedFilename: suggestedFilename,
+                    subfolder: subfolder
                 )
                 onCaptureStored?()
             }
@@ -202,12 +207,17 @@ final class CaptureFlowPresenter {
             }
 
             if preferences.saveToDiskOnCapture {
+                let subfolder = SmartFolderRouter.subfolder(
+                    forAppName: appName,
+                    rules: preferences.smartFolderRules
+                )
                 _ = try captureStore.addCapture(
                     pngData: encoded,
                     pixelSize: captured.pixelSize,
                     displayID: displayID,
                     fileExtension: format.fileExtension,
-                    suggestedFilename: suggestedFilename
+                    suggestedFilename: suggestedFilename,
+                    subfolder: subfolder
                 )
                 onCaptureStored?()
             }

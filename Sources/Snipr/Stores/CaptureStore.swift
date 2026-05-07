@@ -29,19 +29,33 @@ final class CaptureStore {
         pixelSize: CGSize,
         displayID: UInt32?,
         fileExtension: String = "png",
-        suggestedFilename: String? = nil
+        suggestedFilename: String? = nil,
+        subfolder: String? = nil
     ) throws -> CaptureItem {
         try ensureDirectoriesExist()
+
+        // Resolve the destination directory. Phase 4 smart folders pass an
+        // optional subfolder string (possibly nested via "/"); we sanitize
+        // illegal path characters and then create the directory on demand.
+        // When the subfolder is nil/empty we keep the existing on-disk shape.
+        let destinationDirectory: URL
+        if let subfolder, !subfolder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let sanitized = Self.sanitize(subfolder: subfolder)
+            destinationDirectory = imagesDirectory.appending(path: sanitized, directoryHint: .isDirectory)
+            try fileManager.createDirectory(at: destinationDirectory, withIntermediateDirectories: true)
+        } else {
+            destinationDirectory = imagesDirectory
+        }
 
         let id = UUID()
         let baseFilename: String
         if let suggested = suggestedFilename,
-           let unique = Self.uniqueFilename(in: imagesDirectory, suggestion: suggested) {
+           let unique = Self.uniqueFilename(in: destinationDirectory, suggestion: suggested) {
             baseFilename = unique
         } else {
             baseFilename = "\(id.uuidString).\(fileExtension)"
         }
-        let imageURL = imagesDirectory.appending(path: baseFilename)
+        let imageURL = destinationDirectory.appending(path: baseFilename)
         try pngData.write(to: imageURL, options: [.atomic])
 
         let item = CaptureItem(
@@ -153,6 +167,21 @@ final class CaptureStore {
     private func ensureDirectoriesExist() throws {
         try fileManager.createDirectory(at: imagesDirectory, withIntermediateDirectories: true)
         try fileManager.createDirectory(at: recordingsDirectory, withIntermediateDirectories: true)
+    }
+
+    /// Strip path traversal segments and clamp to a single chain of folder
+    /// names. Users can write `Work/Safari` and we'll honor that; anything
+    /// resembling `..` or absolute paths gets dropped so a misconfigured rule
+    /// can't escape the captures root.
+    private static func sanitize(subfolder: String) -> String {
+        let segments = subfolder
+            .split(separator: "/", omittingEmptySubsequences: true)
+            .map { component -> String in
+                let cleaned = component.trimmingCharacters(in: .whitespacesAndNewlines)
+                return cleaned.replacingOccurrences(of: "..", with: "")
+            }
+            .filter { !$0.isEmpty }
+        return segments.joined(separator: "/")
     }
 
     /// Disambiguate a user-friendly filename by appending ` (n)` if the base

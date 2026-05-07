@@ -17,6 +17,7 @@ final class SniprPreferences {
         static let captureFilenameTemplate = "captureFilenameTemplate"
         static let colorOutputFormat = "colorOutputFormat"
         static let recordSystemAudio = "recordSystemAudio"
+        static let smartFolderRules = "smartFolderRules"
     }
 
     var showStackAfterCapture: Bool {
@@ -74,6 +75,13 @@ final class SniprPreferences {
         didSet { defaults.set(recordSystemAudio, forKey: Keys.recordSystemAudio) }
     }
 
+    /// Phase 4: app-name → subfolder routing rules. Rules are evaluated in
+    /// order; first match wins. Empty array means "no routing, captures land
+    /// in the existing `Images/` root".
+    var smartFolderRules: [SmartFolderRule] {
+        didSet { saveSmartFolderRules() }
+    }
+
     @ObservationIgnored
     private let defaults: UserDefaults
 
@@ -94,6 +102,7 @@ final class SniprPreferences {
             rawValue: defaults.string(forKey: Keys.colorOutputFormat) ?? ""
         ) ?? .hex
         recordSystemAudio = defaults.object(forKey: Keys.recordSystemAudio) as? Bool ?? false
+        smartFolderRules = Self.loadSmartFolderRules(from: defaults)
     }
 
     func resetStackDefaults() {
@@ -149,6 +158,19 @@ final class SniprPreferences {
         }
 
         return HotKeyDefaults.bindings.merging(stored) { _, stored in stored }
+    }
+
+    private func saveSmartFolderRules() {
+        guard let data = try? JSONEncoder().encode(smartFolderRules) else { return }
+        defaults.set(data, forKey: Keys.smartFolderRules)
+    }
+
+    private static func loadSmartFolderRules(from defaults: UserDefaults) -> [SmartFolderRule] {
+        guard let data = defaults.data(forKey: Keys.smartFolderRules),
+              let stored = try? JSONDecoder().decode([SmartFolderRule].self, from: data) else {
+            return []
+        }
+        return stored
     }
 
     private static func loadCaptureFormat(from defaults: UserDefaults) -> CaptureFormat {
