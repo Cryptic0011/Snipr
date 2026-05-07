@@ -28,22 +28,35 @@ final class ScrollingFrameCollector {
     }
 
     func start(scWindow: SCWindow) async throws {
+        // Re-fetch the SCWindow immediately before creating the filter.
+        // `SCContentFilter(desktopIndependentWindow:)` can return -3815 if
+        // the SCWindow handle is even slightly stale (the window picker has
+        // closed, focus has shifted, etc.). Resolve against fresh content.
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        guard let freshWindow = content.windows.first(where: { $0.windowID == scWindow.windowID }) else {
+            throw StitchError.noFrames
+        }
+
         let configuration = SCStreamConfiguration()
         let backingScale: CGFloat = NSScreen.screens.first(where: { screen in
-            screen.frame.intersects(scWindow.frame)
+            screen.frame.intersects(freshWindow.frame)
         })?.backingScaleFactor ?? 2.0
-        let pixelWidth = max(2, Int((scWindow.frame.width * backingScale).rounded()))
-        let pixelHeight = max(2, Int((scWindow.frame.height * backingScale).rounded()))
+        let pixelWidth = max(2, Int((freshWindow.frame.width * backingScale).rounded()))
+        let pixelHeight = max(2, Int((freshWindow.frame.height * backingScale).rounded()))
 
         configuration.width = pixelWidth
         configuration.height = pixelHeight
         configuration.scalesToFit = false
         configuration.showsCursor = false
         configuration.capturesAudio = false
-        configuration.minimumFrameInterval = CMTime(value: 1, timescale: 10) // 10 fps
+        // 30 fps — SCK appears to misbehave at very low rates, dropping the
+        // capture source within ~150ms. 30 fps is closer to the working
+        // configuration the recording engine uses.
+        configuration.minimumFrameInterval = CMTime(value: 1, timescale: 30)
+        configuration.queueDepth = 5
         configuration.pixelFormat = kCVPixelFormatType_32BGRA
 
-        let filter = SCContentFilter(desktopIndependentWindow: scWindow)
+        let filter = SCContentFilter(desktopIndependentWindow: freshWindow)
 
         let adapter = ScrollingStreamOutputAdapter(state: state) { [weak self] cumulativePixels in
             // Hop to MainActor for UI updates.
@@ -117,8 +130,9 @@ private final class ScrollingStreamOutputAdapter: NSObject, SCStreamOutput, SCSt
     }
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        // Logged at the integration layer — collector itself just drops the
-        // stream reference and the presenter surfaces the error to the user.
+        // Reserved for future Phase 4.5 scrolling-capture rewrite (full-display
+        // capture + window crop). The current path is disabled at the user-
+        // facing surface; engine retained so re-enabling is a single PR.
     }
 
     private static func cgImage(from pixelBuffer: CVPixelBuffer) -> CGImage? {

@@ -46,7 +46,7 @@ Legend: ⬜ not started · 🟡 in progress · 🟢 done · 🔴 blocked
 
 \* **Phase 4 caveats** (intentional punts surfaced in commits, not regressions):
 - Translate workflow step throws `unsupportedOnThisOS` on every macOS — Apple's `Translation` framework on macOS is presentation-driven (`TranslationSession` requires a SwiftUI host) and was not wired in Phase 4. The "Capture → OCR → Translate → Clipboard" workflow is registered in the palette as a `(preview)` entry; selecting it surfaces an alert. A future revision plugs a real translator into `PendingTranslationEngine` without touching the executor.
-- Scrolling-capture seam quality on Safari / VS Code / Notion was not verified from the agent session — only the row-correlation kernel against programmatic gradients. The kernel intentionally throws `allFramesRejected` rather than fabricate visible seams.
+- **Scrolling capture is disabled at the user surface** pending a Phase 4.5 rewrite. SCK's `SCContentFilter(desktopIndependentWindow:)` stream terminates after ~150 ms with `-3815 "Failed to find any displays or windows to capture"` on every smoke test attempt, even after refetching the SCWindow at filter-creation time and bumping `minimumFrameInterval` to 30 fps + `queueDepth = 5`. The `VisionStitchEngine` kernel is correct and unit-tested — the integration layer needs a different frame source (full-display capture via `SCContentFilter(display:excludingWindows:)` + per-frame crop to the target window's rect). Hotkey default flipped to disabled, palette entry removed, `SniprHotKeyAction.scrollingCapture.isAvailable` returns false, engine + presenter retained intact for Phase 4.5.
 
 ---
 

@@ -113,7 +113,10 @@ enum SniprHotKeyAction: String, CaseIterable, Codable, Identifiable, Sendable {
     }
 
     var isAvailable: Bool {
-        true
+        // Scrolling capture is hidden until the Phase 4.5 rewrite — see
+        // HotKeyDefaults for the SCK -3815 background. Other actions are
+        // fully wired.
+        self != .scrollingCapture
     }
 }
 
@@ -147,7 +150,12 @@ enum HotKeyDefaults {
         .clearStack: .init(keyCode: UInt32(kVK_Delete), modifiers: hotKeyModifiers(command: true), isEnabled: true),
         .ocr: .init(keyCode: UInt32(kVK_ANSI_O), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: true),
         .colorPick: .init(keyCode: UInt32(kVK_ANSI_C), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: true),
-        .scrollingCapture: .init(keyCode: UInt32(kVK_ANSI_V), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: true)
+        // Scrolling capture is implemented but disabled at the user surface
+        // pending a Phase 4.5 rewrite. The SCK desktopIndependentWindow stream
+        // terminates after ~150ms with -3815 ("Failed to find any displays
+        // or windows to capture"). Engine + presenter retained for fast re-
+        // enable; default binding stays disabled so it doesn't register.
+        .scrollingCapture: .init(keyCode: UInt32(kVK_ANSI_V), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: false)
     ]
 }
 
