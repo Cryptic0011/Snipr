@@ -41,6 +41,15 @@ enum ScreenRecordingError: LocalizedError {
 ///
 /// `@MainActor` for the same reason as `CaptureEngine`: callers hand us an
 /// `NSScreen`. The default SCK implementation hops onto its own queue inside.
+/// Phase 3 recording-time options. New options should default to off so
+/// existing call sites compile cleanly and behavior stays unchanged for
+/// callers that don't opt in.
+struct RecordingOptions: Sendable {
+    var capturesSystemAudio: Bool
+
+    static let `default` = RecordingOptions(capturesSystemAudio: false)
+}
+
 @MainActor
 protocol RecordingEngine: AnyObject {
     var isRecording: Bool { get }
@@ -52,7 +61,35 @@ protocol RecordingEngine: AnyObject {
         destinationURL: URL
     ) async throws
 
+    /// Start recording with extra Phase 3 toggles (system audio). Default
+    /// implementation forwards to the legacy entry point so engines that
+    /// don't yet implement the options keep working.
+    func start(
+        displayID: CGDirectDisplayID,
+        rectInDisplayPoints: CGRect,
+        screen: NSScreen,
+        destinationURL: URL,
+        options: RecordingOptions
+    ) async throws
+
     func stop() async throws -> RecordedVideo
 
     func cancel()
+}
+
+extension RecordingEngine {
+    func start(
+        displayID: CGDirectDisplayID,
+        rectInDisplayPoints: CGRect,
+        screen: NSScreen,
+        destinationURL: URL,
+        options: RecordingOptions
+    ) async throws {
+        try await start(
+            displayID: displayID,
+            rectInDisplayPoints: rectInDisplayPoints,
+            screen: screen,
+            destinationURL: destinationURL
+        )
+    }
 }

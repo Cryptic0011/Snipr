@@ -37,7 +37,7 @@ final class WindowCoordinator {
         self.pinPresenter = PinPresenter()
         self.overlayPresenter = OverlayPresenter()
         self.stackPresenter = StackPresenter(captureStore: captureStore, preferences: preferences)
-        self.recordingPresenter = RecordingPresenter(recordingEngine: recordingEngine, captureStore: captureStore)
+        self.recordingPresenter = RecordingPresenter(recordingEngine: recordingEngine, captureStore: captureStore, preferences: preferences)
         self.previewPresenter = PreviewPresenter(captureStore: captureStore)
         self.captureFlowPresenter = CaptureFlowPresenter(
             captureStore: captureStore,

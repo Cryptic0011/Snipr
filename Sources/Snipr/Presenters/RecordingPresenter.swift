@@ -11,6 +11,7 @@ import SwiftUI
 final class RecordingPresenter {
     private let recordingEngine: RecordingEngine
     private let captureStore: CaptureStore
+    private let preferences: SniprPreferences?
     private var recordingHUDPanel: NSPanel?
     private var recordingRegionFramePanel: NSPanel?
     private var activeRecordingDisplayID: CGDirectDisplayID?
@@ -20,14 +21,20 @@ final class RecordingPresenter {
     var onRecordingFinished: (() -> Void)?
     var onError: ((Error) -> Void)?
 
-    init(recordingEngine: RecordingEngine, captureStore: CaptureStore) {
+    init(recordingEngine: RecordingEngine, captureStore: CaptureStore, preferences: SniprPreferences? = nil) {
         self.recordingEngine = recordingEngine
         self.captureStore = captureStore
+        self.preferences = preferences
     }
 
     var isRecording: Bool {
         recordingEngine.isRecording
     }
+
+    /// Phase 3: user-controlled recording toggles, exposed in the HUD before
+    /// the recording starts. Persisted across the session so flipping them
+    /// once sticks for subsequent recordings.
+    var capturesSystemAudio: Bool = false
 
     func start(displayID: CGDirectDisplayID, screen: NSScreen, rect: CGRect) {
         guard !recordingEngine.isRecording else {
@@ -43,11 +50,13 @@ final class RecordingPresenter {
 
             do {
                 let destinationURL = try captureStore.nextRecordingURL()
+                let resolvedSystemAudio = preferences?.recordSystemAudio ?? capturesSystemAudio
                 try await recordingEngine.start(
                     displayID: displayID,
                     rectInDisplayPoints: rect,
                     screen: screen,
-                    destinationURL: destinationURL
+                    destinationURL: destinationURL,
+                    options: RecordingOptions(capturesSystemAudio: resolvedSystemAudio)
                 )
                 activeRecordingDisplayID = displayID
                 showRecordingRegionFrame(screen: screen, rect: rect)

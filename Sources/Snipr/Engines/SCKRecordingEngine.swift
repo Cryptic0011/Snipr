@@ -30,6 +30,22 @@ final class SCKRecordingEngine: NSObject, RecordingEngine {
         screen: NSScreen,
         destinationURL: URL
     ) async throws {
+        try await start(
+            displayID: displayID,
+            rectInDisplayPoints: rectInDisplayPoints,
+            screen: screen,
+            destinationURL: destinationURL,
+            options: .default
+        )
+    }
+
+    func start(
+        displayID: CGDirectDisplayID,
+        rectInDisplayPoints: CGRect,
+        screen: NSScreen,
+        destinationURL: URL,
+        options: RecordingOptions
+    ) async throws {
         guard stream == nil else {
             throw ScreenRecordingError.alreadyRecording
         }
@@ -55,7 +71,7 @@ final class SCKRecordingEngine: NSObject, RecordingEngine {
         configuration.scalesToFit = false
         configuration.minimumFrameInterval = CMTime(value: 1, timescale: 30)
         configuration.showsCursor = true
-        configuration.capturesAudio = false
+        configuration.capturesAudio = options.capturesSystemAudio
         configuration.pixelFormat = kCVPixelFormatType_32BGRA
 
         let filter = SCContentFilter(display: scDisplay, excludingWindows: [])
@@ -73,15 +89,34 @@ final class SCKRecordingEngine: NSObject, RecordingEngine {
         }
         writer.add(writerInput)
 
+        var audioInput: AVAssetWriterInput?
+        if options.capturesSystemAudio {
+            let audioSettings: [String: Any] = [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVSampleRateKey: 48_000,
+                AVNumberOfChannelsKey: 2,
+                AVEncoderBitRateKey: 192_000
+            ]
+            let input = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
+            input.expectsMediaDataInRealTime = true
+            if writer.canAdd(input) {
+                writer.add(input)
+                audioInput = input
+            }
+        }
+
         guard writer.startWriting() else {
             throw ScreenRecordingError.writerUnavailable
         }
 
-        state.assignWriter(writer, input: writerInput)
+        state.assignWriter(writer, input: writerInput, audioInput: audioInput)
 
         let adapter = SCKStreamOutputAdapter(state: state)
         let stream = SCStream(filter: filter, configuration: configuration, delegate: adapter)
         try stream.addStreamOutput(adapter, type: .screen, sampleHandlerQueue: queue)
+        if options.capturesSystemAudio {
+            try stream.addStreamOutput(adapter, type: .audio, sampleHandlerQueue: queue)
+        }
 
         self.streamOutputAdapter = adapter
         self.stream = stream
@@ -97,6 +132,7 @@ final class SCKRecordingEngine: NSObject, RecordingEngine {
             self.destinationURL = nil
             self.pixelSize = .zero
             writerInput.markAsFinished()
+            audioInput?.markAsFinished()
             writer.cancelWriting()
             state.clearWriter()
             try? FileManager.default.removeItem(at: destinationURL)
@@ -172,19 +208,23 @@ private final class SCKStreamOutputAdapter: NSObject, SCStreamOutput, SCStreamDe
     }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {
-        guard outputType == .screen, CMSampleBufferDataIsReady(sampleBuffer) else {
-            return
-        }
+        guard CMSampleBufferDataIsReady(sampleBuffer) else { return }
 
-        if let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
-           let attachment = attachments.first,
-           let rawStatus = attachment[.status] as? Int,
-           let status = SCFrameStatus(rawValue: rawStatus),
-           status != .complete {
-            return
+        switch outputType {
+        case .screen:
+            if let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
+               let attachment = attachments.first,
+               let rawStatus = attachment[.status] as? Int,
+               let status = SCFrameStatus(rawValue: rawStatus),
+               status != .complete {
+                return
+            }
+            state.append(sampleBuffer: sampleBuffer)
+        case .audio:
+            state.appendAudio(sampleBuffer: sampleBuffer)
+        default:
+            break
         }
-
-        state.append(sampleBuffer: sampleBuffer)
     }
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
@@ -208,13 +248,15 @@ private final class SCKStreamOutputAdapter: NSObject, SCStreamOutput, SCStreamDe
 private final class SCKRecordingState: @unchecked Sendable {
     private var writer: AVAssetWriter?
     private var writerInput: AVAssetWriterInput?
+    private var audioInput: AVAssetWriterInput?
     private var firstPresentationTime: CMTime?
     private var lastPresentationTime: CMTime?
     private var finishContinuation: CheckedContinuation<RecordedVideo, Error>?
 
-    func assignWriter(_ writer: AVAssetWriter, input: AVAssetWriterInput) {
+    func assignWriter(_ writer: AVAssetWriter, input: AVAssetWriterInput, audioInput: AVAssetWriterInput? = nil) {
         self.writer = writer
         self.writerInput = input
+        self.audioInput = audioInput
         self.firstPresentationTime = nil
         self.lastPresentationTime = nil
     }
@@ -222,8 +264,22 @@ private final class SCKRecordingState: @unchecked Sendable {
     func clearWriter() {
         writer = nil
         writerInput = nil
+        audioInput = nil
         firstPresentationTime = nil
         lastPresentationTime = nil
+    }
+
+    func appendAudio(sampleBuffer: CMSampleBuffer) {
+        guard let writer, let audioInput else { return }
+        // Audio can arrive before the first video frame; in that case we need
+        // to start the writer session ourselves.
+        let presentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        if firstPresentationTime == nil {
+            firstPresentationTime = presentationTime
+            writer.startSession(atSourceTime: presentationTime)
+        }
+        guard writer.status == .writing, audioInput.isReadyForMoreMediaData else { return }
+        _ = audioInput.append(sampleBuffer)
     }
 
     func append(sampleBuffer: CMSampleBuffer) {
@@ -256,6 +312,7 @@ private final class SCKRecordingState: @unchecked Sendable {
 
         finishContinuation = continuation
         writerInput.markAsFinished()
+        audioInput?.markAsFinished()
 
         let firstTime = firstPresentationTime
         let lastTime = lastPresentationTime
@@ -294,6 +351,7 @@ private final class SCKRecordingState: @unchecked Sendable {
 
     func cancelWriting() {
         writerInput?.markAsFinished()
+        audioInput?.markAsFinished()
         writer?.cancelWriting()
         if let pending = finishContinuation {
             finishContinuation = nil

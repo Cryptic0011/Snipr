@@ -16,6 +16,7 @@ final class SniprPreferences {
         static let captureFormat = "captureFormat"
         static let captureFilenameTemplate = "captureFilenameTemplate"
         static let colorOutputFormat = "colorOutputFormat"
+        static let recordSystemAudio = "recordSystemAudio"
     }
 
     var showStackAfterCapture: Bool {
@@ -68,6 +69,11 @@ final class SniprPreferences {
         didSet { defaults.set(colorOutputFormat.rawValue, forKey: Keys.colorOutputFormat) }
     }
 
+    /// Phase 3: include system audio in screen recordings.
+    var recordSystemAudio: Bool {
+        didSet { defaults.set(recordSystemAudio, forKey: Keys.recordSystemAudio) }
+    }
+
     @ObservationIgnored
     private let defaults: UserDefaults
 
@@ -87,6 +93,7 @@ final class SniprPreferences {
         colorOutputFormat = ColorOutputFormat(
             rawValue: defaults.string(forKey: Keys.colorOutputFormat) ?? ""
         ) ?? .hex
+        recordSystemAudio = defaults.object(forKey: Keys.recordSystemAudio) as? Bool ?? false
     }
 
     func resetStackDefaults() {

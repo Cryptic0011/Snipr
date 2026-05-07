@@ -21,20 +21,19 @@ final class PreviewPresenter {
     }
 
     func openPreview(for item: CaptureItem) {
-        guard item.mediaType == .image else {
-            NSWorkspace.shared.open(item.fileURL)
-            onPreviewOpened?()
-            return
-        }
-
         if let window = previewWindows[item.id] {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
 
-        guard let contentProvider else {
-            return
+        let rootView: AnyView
+        switch item.mediaType {
+        case .image:
+            guard let contentProvider else { return }
+            rootView = contentProvider(item)
+        case .video:
+            rootView = AnyView(VideoTrimView(item: item))
         }
 
         let window = NSWindow(
@@ -44,7 +43,7 @@ final class PreviewPresenter {
             defer: false
         )
         window.title = item.filename
-        window.contentView = NSHostingView(rootView: contentProvider(item))
+        window.contentView = NSHostingView(rootView: rootView)
         window.center()
         previewWindows[item.id] = window
         window.makeKeyAndOrderFront(nil)
