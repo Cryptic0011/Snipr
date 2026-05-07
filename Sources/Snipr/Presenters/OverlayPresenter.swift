@@ -32,7 +32,7 @@ final class OverlayPresenter {
                 continue
             }
 
-            let window = NSPanel(
+            let window = KeyableSelectionPanel(
                 contentRect: screen.frame,
                 styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered,
@@ -58,6 +58,11 @@ final class OverlayPresenter {
 
             overlayWindows.append(window)
             window.orderFrontRegardless()
+            // Borderless + nonactivating panels can't become key by default,
+            // so keyDown (Esc to cancel) never reaches the overlay view.
+            // KeyableSelectionPanel opts in to canBecomeKey without activating
+            // the app, then we make it key on the screen the user clicks.
+            window.makeKey()
         }
     }
 
@@ -79,4 +84,11 @@ final class OverlayPresenter {
         closeCaptureOverlays()
         onSelectionComplete?(mode, displayID, screen, rect)
     }
+}
+
+/// `NSPanel` subclass that opts in to becoming key while keeping the
+/// `.nonactivatingPanel` behavior. Required so the selection overlay can
+/// receive keyDown events (Esc to cancel) without bringing the app forward.
+private final class KeyableSelectionPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
 }

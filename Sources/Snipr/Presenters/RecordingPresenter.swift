@@ -111,6 +111,9 @@ final class RecordingPresenter {
         panel.isOpaque = false
         panel.hasShadow = false
         panel.ignoresMouseEvents = true
+        // SCK honors NSWindow.sharingType — .none keeps this overlay out of
+        // the recording so the red frame doesn't appear in the saved file.
+        panel.sharingType = .none
         panel.contentView = NSHostingView(rootView: RecordingRegionFrameView(size: rect.size, padding: padding))
         recordingRegionFramePanel = panel
         panel.orderFrontRegardless()
@@ -139,6 +142,10 @@ final class RecordingPresenter {
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
+        // Keep the HUD out of the recording too — even though it sits outside
+        // the user-selected region, this is hygiene against future region picks
+        // that overlap it.
+        panel.sharingType = .none
         panel.contentView = NSHostingView(
             rootView: RecordingHUDView(
                 startedAt: Date(),
