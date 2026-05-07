@@ -136,6 +136,8 @@ private extension SniprHotKeyAction {
             11
         case .colorPick:
             12
+        case .scrollingCapture:
+            13
         }
     }
 }

@@ -15,6 +15,7 @@ enum SniprHotKeyAction: String, CaseIterable, Codable, Identifiable, Sendable {
     case clearStack
     case ocr
     case colorPick
+    case scrollingCapture
 
     var id: String { rawValue }
 
@@ -44,6 +45,8 @@ enum SniprHotKeyAction: String, CaseIterable, Codable, Identifiable, Sendable {
             "OCR Selection"
         case .colorPick:
             "Pick Color"
+        case .scrollingCapture:
+            "Scrolling Capture"
         }
     }
 
@@ -73,6 +76,8 @@ enum SniprHotKeyAction: String, CaseIterable, Codable, Identifiable, Sendable {
             "Recognize text in a selected region"
         case .colorPick:
             "Sample a pixel color and copy it"
+        case .scrollingCapture:
+            "Pick a window, scroll inside it, get one tall stitched capture"
         }
     }
 
@@ -102,6 +107,8 @@ enum SniprHotKeyAction: String, CaseIterable, Codable, Identifiable, Sendable {
             "textformat.123"
         case .colorPick:
             "eyedropper"
+        case .scrollingCapture:
+            "rectangle.portrait.and.arrow.right"
         }
     }
 
@@ -139,7 +146,8 @@ enum HotKeyDefaults {
         .showStack: .init(keyCode: UInt32(kVK_ANSI_S), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: true),
         .clearStack: .init(keyCode: UInt32(kVK_Delete), modifiers: hotKeyModifiers(command: true), isEnabled: true),
         .ocr: .init(keyCode: UInt32(kVK_ANSI_O), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: true),
-        .colorPick: .init(keyCode: UInt32(kVK_ANSI_C), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: true)
+        .colorPick: .init(keyCode: UInt32(kVK_ANSI_C), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: true),
+        .scrollingCapture: .init(keyCode: UInt32(kVK_ANSI_V), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: true)
     ]
 }
 

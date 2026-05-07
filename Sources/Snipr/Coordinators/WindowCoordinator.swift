@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import ScreenCaptureKit
 import SwiftUI
 
 /// Router that forwards capture / record / preview commands to the appropriate
@@ -23,6 +24,7 @@ final class WindowCoordinator {
     let pinPresenter: PinPresenter
     let translationEngine: any TranslationEngine
     let ocrEngine: any OCREngine
+    let scrollingCapturePresenter: ScrollingCapturePresenter
 
     init(
         captureStore: CaptureStore,
@@ -40,6 +42,10 @@ final class WindowCoordinator {
         self.ocrEngine = ocrEngine
         self.translationEngine = translationEngine ?? DefaultTranslationEngineFactory.makeDefault()
         self.pinPresenter = PinPresenter()
+        self.scrollingCapturePresenter = ScrollingCapturePresenter(
+            captureStore: captureStore,
+            preferences: preferences
+        )
         self.overlayPresenter = OverlayPresenter()
         self.stackPresenter = StackPresenter(captureStore: captureStore, preferences: preferences)
         self.recordingPresenter = RecordingPresenter(recordingEngine: recordingEngine, captureStore: captureStore, preferences: preferences)
@@ -68,6 +74,7 @@ final class WindowCoordinator {
         case .ocrSelection: startOCR()
         case .showOCRHistory: showOCRHistory()
         case .pickColor: startColorPick()
+        case .scrollingCapture: startScrollingCapture()
         }
     }
 
@@ -108,8 +115,24 @@ final class WindowCoordinator {
 
     func startWindowCapture() {
         guard captureFlowPresenter.ensureScreenRecordingAccess() else { return }
+        scrollingCaptureMode = false
         overlayPresenter.showWindowPickerOverlays()
     }
+
+    /// Phase 4 scrolling capture entry point. Reuses the Phase 1 window picker
+    /// — once the user picks a window we hand the SCWindow + app name to
+    /// `ScrollingCapturePresenter`, which streams frames at ~10 fps until the
+    /// user clicks "Stitch Now" on the floating progress HUD.
+    func startScrollingCapture() {
+        guard captureFlowPresenter.ensureScreenRecordingAccess() else { return }
+        scrollingCaptureMode = true
+        overlayPresenter.showWindowPickerOverlays()
+    }
+
+    /// Set when the user invokes scrolling capture. The window picker callback
+    /// reads this to decide whether to route to `captureFlowPresenter`
+    /// (single-shot) or `scrollingCapturePresenter` (frame stream).
+    private var scrollingCaptureMode: Bool = false
 
     func startOCR() {
         guard captureFlowPresenter.ensureScreenRecordingAccess() else { return }
@@ -272,12 +295,18 @@ final class WindowCoordinator {
             self?.handleSelection(mode: mode, displayID: displayID, screen: screen, rect: rect)
         }
         overlayPresenter.onWindowPicked = { [weak self] entry, displayID, _, _ in
-            self?.captureFlowPresenter.captureWindow(
-                scWindowID: entry.scWindowID,
-                displayID: displayID,
-                windowTitle: entry.title,
-                appName: entry.appName
-            )
+            guard let self else { return }
+            if self.scrollingCaptureMode {
+                self.scrollingCaptureMode = false
+                self.startScrolling(entry: entry)
+            } else {
+                self.captureFlowPresenter.captureWindow(
+                    scWindowID: entry.scWindowID,
+                    displayID: displayID,
+                    windowTitle: entry.title,
+                    appName: entry.appName
+                )
+            }
         }
         overlayPresenter.onCancel = nil
         stackPresenter.contentProvider = { [weak self] in
@@ -300,6 +329,24 @@ final class WindowCoordinator {
         previewPresenter.onError = { error in NSAlert(error: error).runModal() }
         captureFlowPresenter.onError = { error in NSAlert(error: error).runModal() }
         captureFlowPresenter.onCaptureStored = { [weak self] in self?.showThumbnailStack() }
+        scrollingCapturePresenter.onError = { error in NSAlert(error: error).runModal() }
+        scrollingCapturePresenter.onCaptureStored = { [weak self] in self?.showThumbnailStack() }
+    }
+
+    private func startScrolling(entry: WindowPickerNSView.WindowEntry) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+                guard let scWindow = content.windows.first(where: { $0.windowID == entry.scWindowID }) else {
+                    self.captureFlowPresenter.onError?(ScreenCaptureError.displayNotFound)
+                    return
+                }
+                self.scrollingCapturePresenter.start(scWindow: scWindow, appName: entry.appName)
+            } catch {
+                self.captureFlowPresenter.onError?(error)
+            }
+        }
     }
 
     private func handleSelection(mode: CaptureOverlayMode, displayID: CGDirectDisplayID, screen: NSScreen, rect: CGRect) {

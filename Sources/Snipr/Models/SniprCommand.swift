@@ -11,6 +11,7 @@ enum SniprCommandID: String, CaseIterable, Codable, Sendable {
     case ocrSelection
     case showOCRHistory
     case pickColor
+    case scrollingCapture
 }
 
 struct SniprCommand: Identifiable, Equatable, Sendable {
@@ -62,6 +63,13 @@ struct SniprCommand: Identifiable, Equatable, Sendable {
             subtitle: "Sample a pixel color and copy it",
             systemImage: "eyedropper",
             shortcut: "⌘⇧C"
+        ),
+        .init(
+            id: .scrollingCapture,
+            title: "Scrolling Capture",
+            subtitle: "Pick a window, scroll inside it, get one tall stitched capture",
+            systemImage: "rectangle.portrait.and.arrow.right",
+            shortcut: "⌘⇧V"
         ),
         .init(
             id: .openHistory,

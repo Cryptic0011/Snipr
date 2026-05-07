@@ -75,6 +75,8 @@ final class SniprAppModel {
             coordinator.startOCR()
         case .colorPick:
             coordinator.startColorPick()
+        case .scrollingCapture:
+            coordinator.startScrollingCapture()
         }
     }
 }
