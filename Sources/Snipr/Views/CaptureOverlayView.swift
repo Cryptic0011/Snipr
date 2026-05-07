@@ -203,7 +203,7 @@ final class CaptureSelectionNSView: NSView {
 
     private func installLoupe() {
         let dimension = MagnifierLoupeView.dimension
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: dimension, height: dimension + 22))
+        let container = FlippedContainerView(frame: NSRect(x: 0, y: 0, width: dimension, height: dimension + 22))
         container.wantsLayer = true
         container.isHidden = true
 
@@ -214,6 +214,9 @@ final class CaptureSelectionNSView: NSView {
         hexLabel.backgroundColor = NSColor.black.withAlphaComponent(0.72)
         hexLabel.drawsBackground = true
         hexLabel.alignment = .center
+        // Container is flipped (top-left origin). Loupe sits at the top, hex
+        // readout sits 2 px below it. Without the flip the loupe would render
+        // at the *bottom* of the container — visually ~22 px below the cursor.
         hexLabel.frame = NSRect(x: 0, y: dimension + 2, width: dimension, height: 18)
 
         container.addSubview(loupe)
@@ -321,4 +324,11 @@ struct CaptureOverlayView: NSViewRepresentable {
         nsView.onComplete = onComplete
         nsView.onCancel = onCancel
     }
+}
+
+/// `NSView` subclass with `isFlipped = true` so child positions are
+/// interpreted top-down. Used as the loupe container so its `frame.origin`
+/// matches the surrounding flipped capture overlay coordinate space.
+private final class FlippedContainerView: NSView {
+    override var isFlipped: Bool { true }
 }
