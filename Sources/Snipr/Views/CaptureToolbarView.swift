@@ -6,6 +6,8 @@ enum CaptureToolbarMode: String, CaseIterable, Identifiable {
     case captureSelection
     case recordScreen
     case recordSelection
+    case ocrSelection
+    case pickColor
 
     var id: String { rawValue }
 
@@ -21,6 +23,10 @@ enum CaptureToolbarMode: String, CaseIterable, Identifiable {
             "Record Entire Screen"
         case .recordSelection:
             "Record Selected Portion"
+        case .ocrSelection:
+            "OCR Selected Region"
+        case .pickColor:
+            "Pick a Pixel Color"
         }
     }
 
@@ -36,6 +42,10 @@ enum CaptureToolbarMode: String, CaseIterable, Identifiable {
             "record.circle"
         case .recordSelection:
             "rectangle.dashed.badge.record"
+        case .ocrSelection:
+            "textformat.123"
+        case .pickColor:
+            "eyedropper"
         }
     }
 
@@ -45,6 +55,10 @@ enum CaptureToolbarMode: String, CaseIterable, Identifiable {
             "Capture"
         case .recordScreen, .recordSelection:
             "Record"
+        case .ocrSelection:
+            "OCR"
+        case .pickColor:
+            "Sample"
         }
     }
 
@@ -82,6 +96,12 @@ struct CaptureToolbarView: View {
                 .padding(.horizontal, 6)
 
             toolbarButtons(for: [.recordScreen, .recordSelection])
+
+            Divider()
+                .frame(height: 30)
+                .padding(.horizontal, 6)
+
+            toolbarButtons(for: [.ocrSelection, .pickColor])
 
             Divider()
                 .frame(height: 30)

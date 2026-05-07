@@ -181,6 +181,14 @@ private struct HeroPane: View {
                     coordinator.startScreenRecordingArea()
                 }
 
+                ActionButton(title: "OCR Selection", systemImage: "textformat.123") {
+                    coordinator.startOCR()
+                }
+
+                ActionButton(title: "Pick Color", systemImage: "eyedropper") {
+                    coordinator.startColorPick()
+                }
+
                 ActionButton(title: "Open Palette", systemImage: "command") {
                     coordinator.showCommandPalette()
                 }

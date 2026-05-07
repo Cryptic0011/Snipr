@@ -28,8 +28,7 @@ struct PreviewWindowView: View {
                         draftAnnotation: draftAnnotation,
                         onDraftChanged: { draftAnnotation = $0 },
                         onCommit: { annotation in
-                            annotations.append(annotation)
-                            draftAnnotation = nil
+                            commit(annotation)
                         },
                         onCancelDraft: {
                             draftAnnotation = nil
@@ -44,6 +43,37 @@ struct PreviewWindowView: View {
             }
 
             footer
+        }
+        .sheet(isPresented: Binding(
+            get: { pendingTextDraft != nil },
+            set: { if !$0 { pendingTextDraft = nil } }
+        )) {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Add Text Annotation")
+                    .font(.headline)
+                TextField("Text", text: $pendingTextString)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 320)
+                HStack {
+                    Spacer()
+                    Button("Cancel") {
+                        pendingTextDraft = nil
+                        pendingTextString = ""
+                    }
+                    Button("Add") {
+                        if var draft = pendingTextDraft {
+                            draft.text = pendingTextString
+                            if !draft.text.isEmpty {
+                                annotations.append(draft)
+                            }
+                        }
+                        pendingTextDraft = nil
+                        pendingTextString = ""
+                    }
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(20)
         }
     }
 
@@ -161,6 +191,26 @@ struct PreviewWindowView: View {
         }
     }
 
+    private func commit(_ annotation: AnnotationLayer) {
+        var draft = annotation
+        switch annotation.kind {
+        case .step:
+            // Auto-increment based on existing step counters in the layer stack.
+            let nextNumber = (annotations.filter { $0.kind == .step }.map(\.stepNumber).max() ?? 0) + 1
+            draft.stepNumber = nextNumber
+            annotations.append(draft)
+            draftAnnotation = nil
+        case .text:
+            // Defer commit until the user types text in the popover.
+            pendingTextDraft = draft
+            pendingTextString = ""
+            draftAnnotation = nil
+        default:
+            annotations.append(draft)
+            draftAnnotation = nil
+        }
+    }
+
     private func undo() {
         _ = annotations.popLast()
     }
@@ -252,7 +302,10 @@ private struct AnnotationCanvasView: View {
     }
 
     private func drawingGesture(imageSize: CGSize, displayRect: CGRect) -> some Gesture {
-        DragGesture(minimumDistance: 2)
+        // Step / text are single-point tools — drop minimumDistance so a tap
+        // also commits.
+        let needsTap = selectedTool == .step || selectedTool == .text
+        return DragGesture(minimumDistance: needsTap ? 0 : 2)
             .onChanged { value in
                 guard let start = ImagePresentationGeometry.imagePoint(
                     from: value.startLocation,

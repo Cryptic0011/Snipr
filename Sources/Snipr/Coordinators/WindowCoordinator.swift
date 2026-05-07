@@ -74,6 +74,8 @@ final class WindowCoordinator {
         case .captureSelection: startCaptureArea()
         case .recordScreen: startScreenRecordingFullScreen()
         case .recordSelection: startScreenRecordingArea()
+        case .ocrSelection: startOCR()
+        case .pickColor: startColorPick()
         }
     }
 

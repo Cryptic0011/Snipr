@@ -23,7 +23,7 @@ final class CaptureToolbarPresenter {
             return
         }
 
-        let size = NSSize(width: 586, height: 58)
+        let size = NSSize(width: 720, height: 58)
         let origin = NSPoint(
             x: screen.visibleFrame.midX - size.width / 2,
             y: screen.visibleFrame.minY + 34

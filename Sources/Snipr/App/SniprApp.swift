@@ -260,6 +260,39 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Recording") {
+                Toggle("Record system audio", isOn: Binding(
+                    get: { model.preferences.recordSystemAudio },
+                    set: { model.preferences.recordSystemAudio = $0 }
+                ))
+                Text("Mixes desktop audio into the recording. Microphone capture is not available yet.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Annotation") {
+                LabeledContent("Available Tools") {
+                    Text(AnnotationKind.allCases.map(\.title).joined(separator: ", "))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.trailing)
+                }
+
+                LabeledContent("Color Output Format") {
+                    Picker("Color Output Format", selection: Binding(
+                        get: { model.preferences.colorOutputFormat },
+                        set: { model.preferences.colorOutputFormat = $0 }
+                    )) {
+                        ForEach(ColorOutputFormat.allCases) { format in
+                            Text(format.title).tag(format)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .frame(width: 200)
+                }
+            }
+
             HotKeysSettingsSection(model: model)
 
             Section("Storage") {

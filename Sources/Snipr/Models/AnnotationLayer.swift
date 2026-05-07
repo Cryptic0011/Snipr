@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 import SwiftUI
 
-enum AnnotationKind: String, CaseIterable, Identifiable {
+enum AnnotationKind: String, CaseIterable, Identifiable, Codable, Sendable {
     case arrow
     case rectangle
     case ellipse
@@ -137,6 +137,13 @@ struct AnnotationLayer: Identifiable, Equatable {
     }
 
     var isMeaningful: Bool {
-        hypot(end.x - start.x, end.y - start.y) > 8
+        switch kind {
+        case .step:
+            true // a single-point tap is meaningful for step badges
+        case .text:
+            !text.isEmpty
+        default:
+            hypot(end.x - start.x, end.y - start.y) > 8
+        }
     }
 }
