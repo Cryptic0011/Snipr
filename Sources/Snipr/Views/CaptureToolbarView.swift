@@ -49,7 +49,7 @@ enum CaptureToolbarMode: String, CaseIterable, Identifiable {
     }
 
     var isEnabled: Bool {
-        self != .captureWindow
+        true
     }
 }
 

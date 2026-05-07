@@ -78,16 +78,23 @@ final class WindowPickerNSView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.black.withAlphaComponent(0.18).setFill()
+        NSColor.black.withAlphaComponent(0.32).setFill()
         bounds.fill()
 
         guard let hovered else { return }
 
+        // Punch a clear hole through the dim layer so the hovered window
+        // shows through full-brightness, then tint with system blue. This
+        // mirrors macOS Screenshot.app's window-pick highlight.
+        NSColor.clear.setFill()
+        hovered.frame.fill(using: .copy)
+
         let path = NSBezierPath(rect: hovered.frame)
-        NSColor.systemCyan.withAlphaComponent(0.18).setFill()
+        NSColor.systemBlue.withAlphaComponent(0.28).setFill()
         path.fill()
-        NSColor.systemCyan.setStroke()
-        path.lineWidth = 2
+
+        NSColor.white.withAlphaComponent(0.92).setStroke()
+        path.lineWidth = 3
         path.stroke()
 
         drawLabel(for: hovered)
@@ -96,18 +103,38 @@ final class WindowPickerNSView: NSView {
     private func drawLabel(for entry: WindowEntry) {
         let primary = entry.appName ?? "Window"
         let secondary = entry.title ?? ""
-        let text = secondary.isEmpty ? primary : "\(primary) — \(secondary)"
+        let text = "📷  " + (secondary.isEmpty ? primary : "\(primary) — \(secondary)")
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
-            .foregroundColor: NSColor.white,
-            .backgroundColor: NSColor.black.withAlphaComponent(0.78)
+            .foregroundColor: NSColor.white
         ]
-        let textSize = text.size(withAttributes: attributes)
-        let origin = CGPoint(
-            x: max(8, entry.frame.minX),
-            y: max(8, entry.frame.minY - textSize.height - 8)
+        let attributed = NSAttributedString(string: text, attributes: attributes)
+        let textSize = attributed.size()
+
+        let pillPadding = NSEdgeInsets(top: 5, left: 10, bottom: 5, right: 10)
+        let pillSize = NSSize(
+            width: textSize.width + pillPadding.left + pillPadding.right,
+            height: textSize.height + pillPadding.top + pillPadding.bottom
         )
-        text.draw(at: origin, withAttributes: attributes)
+        // Default to placing the label above the window; if the window is
+        // near the top edge, slot it inside the top of the window instead.
+        var origin = CGPoint(
+            x: max(8, entry.frame.minX),
+            y: entry.frame.minY - pillSize.height - 8
+        )
+        if origin.y < 8 {
+            origin.y = entry.frame.minY + 8
+        }
+
+        let pillRect = CGRect(origin: origin, size: pillSize)
+        let pillPath = NSBezierPath(roundedRect: pillRect, xRadius: 6, yRadius: 6)
+        NSColor.black.withAlphaComponent(0.82).setFill()
+        pillPath.fill()
+
+        attributed.draw(at: CGPoint(
+            x: origin.x + pillPadding.left,
+            y: origin.y + pillPadding.top
+        ))
     }
 
     private func windowAt(point: CGPoint) -> WindowEntry? {
