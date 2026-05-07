@@ -86,8 +86,12 @@ final class HotKeyService {
 
     private func register(keyCode: UInt32, modifiers: UInt32, id: UInt32, action: SniprHotKeyAction) {
         var hotKeyRef: EventHotKeyRef?
-        let signature = OSType(UInt32(bigEndian: "SNPR".fourCharCode))
-        let hotKeyID = EventHotKeyID(signature: signature, id: id)
+        // "SNPR" is already a big-endian-ordered FourCharCode after
+        // `fourCharCode` packs it MSB→LSB. The previous `UInt32(bigEndian:)`
+        // wrapper byte-swapped it a second time, producing 0x52504E53. The
+        // Carbon HotKey signature is conventionally the literal four-char
+        // value (0x534E5052 for "SNPR"), so drop the swap.
+        let hotKeyID = EventHotKeyID(signature: OSType("SNPR".fourCharCode), id: id)
         let status = RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetApplicationEventTarget(), 0, &hotKeyRef)
 
         if status == noErr {
@@ -128,7 +132,10 @@ private extension SniprHotKeyAction {
     }
 }
 
-private extension String {
+extension String {
+    /// Packs the first four ASCII characters MSB→LSB into a `UInt32`.
+    /// `"SNPR"` becomes `0x534E5052`. Internal so tests can assert the
+    /// signature value pinned by the Phase 0 acceptance criteria.
     var fourCharCode: UInt32 {
         unicodeScalars.reduce(UInt32(0)) { result, scalar in
             (result << 8) + scalar.value
