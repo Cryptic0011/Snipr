@@ -6,6 +6,8 @@ enum SniprHotKeyAction: String, CaseIterable, Codable, Identifiable, Sendable {
     case openApp
     case captureArea
     case captureToolbar
+    case captureWindow
+    case captureLastRegion
     case screenRecord
     case commandPalette
     case hideStack
@@ -22,6 +24,10 @@ enum SniprHotKeyAction: String, CaseIterable, Codable, Identifiable, Sendable {
             "Screenshot"
         case .captureToolbar:
             "Capture Toolbar"
+        case .captureWindow:
+            "Capture Window"
+        case .captureLastRegion:
+            "Repeat Last Region"
         case .screenRecord:
             "Quick Screen Record"
         case .commandPalette:
@@ -43,6 +49,10 @@ enum SniprHotKeyAction: String, CaseIterable, Codable, Identifiable, Sendable {
             "Capture a selected screen region"
         case .captureToolbar:
             "Choose screenshot or recording mode"
+        case .captureWindow:
+            "Pick a window to capture"
+        case .captureLastRegion:
+            "Recapture the last selected region"
         case .screenRecord:
             "Record a selected screen region immediately"
         case .commandPalette:
@@ -64,6 +74,10 @@ enum SniprHotKeyAction: String, CaseIterable, Codable, Identifiable, Sendable {
             "selection.pin.in.out"
         case .captureToolbar:
             "camera.viewfinder"
+        case .captureWindow:
+            "macwindow.on.rectangle"
+        case .captureLastRegion:
+            "arrow.clockwise"
         case .screenRecord:
             "record.circle"
         case .commandPalette:
@@ -103,6 +117,8 @@ enum HotKeyDefaults {
         .openApp: .init(keyCode: UInt32(kVK_ANSI_S), modifiers: hotKeyModifiers(command: true, option: true), isEnabled: true),
         .captureArea: .init(keyCode: UInt32(kVK_ANSI_4), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: true),
         .captureToolbar: .init(keyCode: UInt32(kVK_ANSI_5), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: true),
+        .captureWindow: .init(keyCode: UInt32(kVK_ANSI_W), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: false),
+        .captureLastRegion: .init(keyCode: UInt32(kVK_ANSI_7), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: false),
         .screenRecord: .init(keyCode: UInt32(kVK_ANSI_6), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: true),
         .commandPalette: .init(keyCode: UInt32(kVK_Space), modifiers: hotKeyModifiers(command: true, shift: true), isEnabled: true),
         .hideStack: .init(keyCode: UInt32(kVK_Escape), modifiers: hotKeyModifiers(command: true, option: true), isEnabled: true),

@@ -128,6 +128,10 @@ private extension SniprHotKeyAction {
             7
         case .clearStack:
             8
+        case .captureWindow:
+            9
+        case .captureLastRegion:
+            10
         }
     }
 }

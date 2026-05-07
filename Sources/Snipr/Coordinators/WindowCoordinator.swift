@@ -58,7 +58,7 @@ final class WindowCoordinator {
         hideCaptureToolbar()
         switch mode {
         case .captureScreen: startCaptureFullScreen()
-        case .captureWindow: showWindowCaptureComingSoon()
+        case .captureWindow: startWindowCapture()
         case .captureSelection: startCaptureArea()
         case .recordScreen: startScreenRecordingFullScreen()
         case .recordSelection: startScreenRecordingArea()
@@ -85,6 +85,16 @@ final class WindowCoordinator {
         guard !recordingPresenter.isRecording, captureFlowPresenter.ensureScreenRecordingAccess(),
               let screen = NSScreen.main, let displayID = screen.sniprDisplayID else { return }
         recordingPresenter.start(displayID: displayID, screen: screen, rect: CGRect(origin: .zero, size: screen.frame.size))
+    }
+
+    func startWindowCapture() {
+        guard captureFlowPresenter.ensureScreenRecordingAccess() else { return }
+        overlayPresenter.showWindowPickerOverlays()
+    }
+
+    func captureLastRegion() {
+        guard captureFlowPresenter.ensureScreenRecordingAccess() else { return }
+        captureFlowPresenter.captureLastRegion()
     }
 
     func showThumbnailStack() { stackPresenter.show() }
@@ -139,6 +149,15 @@ final class WindowCoordinator {
         overlayPresenter.onSelectionComplete = { [weak self] mode, displayID, screen, rect in
             self?.handleSelection(mode: mode, displayID: displayID, screen: screen, rect: rect)
         }
+        overlayPresenter.onWindowPicked = { [weak self] entry, displayID, screen, rect in
+            self?.captureFlowPresenter.completeCapture(
+                displayID: displayID,
+                screen: screen,
+                rect: rect,
+                windowTitle: entry.title,
+                appName: entry.appName
+            )
+        }
         stackPresenter.contentProvider = { [weak self] in
             guard let self else { return AnyView(EmptyView()) }
             return AnyView(ThumbnailStackView(store: self.captureStore, coordinator: self))
@@ -167,11 +186,4 @@ final class WindowCoordinator {
         }
     }
 
-    func showWindowCaptureComingSoon() {
-        let alert = NSAlert()
-        alert.messageText = "Window Capture"
-        alert.informativeText = "The toolbar option is in place. Window picking is the next capture mode to wire."
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
-    }
 }

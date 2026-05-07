@@ -11,29 +11,6 @@ enum CaptureOverlayMode: Sendable {
     case recording
 }
 
-/// Snapshot of the on-screen window list at the moment the overlay opened,
-/// converted into the snapping/highlighting forms the overlay needs.
-@MainActor
-struct OverlayWindowSnapshot: Sendable {
-    /// Per-screen list of windows. Each entry is a frame in display points
-    /// (with the same top-left origin convention the overlay uses) plus
-    /// metadata for the window-picker label.
-    struct Window: Sendable {
-        let frameInScreen: CGRect
-        let scWindowID: CGWindowID
-        let title: String?
-        let appName: String?
-    }
-
-    /// Keyed by `CGDirectDisplayID`. A display with no on-screen windows
-    /// (rare) still gets an empty array.
-    let windowsByDisplay: [CGDirectDisplayID: [Window]]
-    /// Cached display image keyed by `CGDirectDisplayID`. Populated
-    /// asynchronously after the overlay opens — the loupe falls back to a
-    /// neutral background until the snapshot resolves.
-    var displayImageByDisplay: [CGDirectDisplayID: CGImage]
-}
-
 /// Owns the per-screen selection overlay windows. Its job is purely to put up
 /// `CaptureOverlayView` panels, listen for the user's selection, and notify
 /// the coordinator. It does not know about engines or stores.
@@ -42,8 +19,10 @@ struct OverlayWindowSnapshot: Sendable {
 final class OverlayPresenter {
     private var overlayWindows: [NSWindow] = []
     private var hostViews: [CaptureSelectionNSView] = []
+    private var pickerViews: [WindowPickerNSView] = []
     private var activeMode: CaptureOverlayMode?
     var onSelectionComplete: ((CaptureOverlayMode, CGDirectDisplayID, NSScreen, CGRect) -> Void)?
+    var onWindowPicked: ((WindowPickerNSView.WindowEntry, CGDirectDisplayID, NSScreen, CGRect) -> Void)?
     var onCancel: (() -> Void)?
 
     init() {}
@@ -69,37 +48,50 @@ final class OverlayPresenter {
             }
             view.sourceScale = screen.backingScaleFactor
 
-            let window = KeyableSelectionPanel(
-                contentRect: screen.frame,
-                styleMask: [.borderless, .nonactivatingPanel],
-                backing: .buffered,
-                defer: false
-            )
-            window.level = .screenSaver
-            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-            window.backgroundColor = .clear
-            window.isOpaque = false
-            window.ignoresMouseEvents = false
-            window.contentView = view
-
+            let window = makePanel(frame: screen.frame, content: view)
             overlayWindows.append(window)
             hostViews.append(view)
             window.orderFrontRegardless()
-            // Borderless + nonactivating panels can't become key by default,
-            // so keyDown (Esc to cancel) never reaches the overlay view.
-            // KeyableSelectionPanel opts in to canBecomeKey without activating
-            // the app, then we make it key on the screen the user clicks.
             window.makeKey()
         }
 
         self.hostViews = hostViews
 
-        // Kick off async loaders for the loupe source image and the on-screen
-        // window list. Both are best-effort — overlay stays usable without
-        // them; loupe falls back to no zoom and snap is a no-op until the
-        // window list arrives.
         Task { @MainActor [weak self] in
             await self?.loadDisplayImagesAndWindows()
+        }
+    }
+
+    /// Show a per-screen window-picker overlay. Click highlights the window
+    /// under cursor, click captures it through the existing capture flow.
+    func showWindowPickerOverlays() {
+        closeCaptureOverlays()
+        activeMode = .screenshot
+
+        var pickers: [WindowPickerNSView] = []
+        for screen in NSScreen.screens {
+            guard let displayID = screen.sniprDisplayID else { continue }
+
+            let view = WindowPickerNSView()
+            view.onPick = { [weak self] entry, rect in
+                self?.closeCaptureOverlays()
+                self?.onWindowPicked?(entry, displayID, screen, rect)
+            }
+            view.onCancel = { [weak self] in
+                self?.closeCaptureOverlays()
+                self?.onCancel?()
+            }
+
+            let window = makePanel(frame: screen.frame, content: view)
+            overlayWindows.append(window)
+            pickers.append(view)
+            window.orderFrontRegardless()
+            window.makeKey()
+        }
+        self.pickerViews = pickers
+
+        Task { @MainActor [weak self] in
+            await self?.loadWindowsForPicker()
         }
     }
 
@@ -111,7 +103,24 @@ final class OverlayPresenter {
         }
         overlayWindows.removeAll()
         hostViews.removeAll()
+        pickerViews.removeAll()
         activeMode = nil
+    }
+
+    private func makePanel(frame: NSRect, content: NSView) -> NSPanel {
+        let panel = KeyableSelectionPanel(
+            contentRect: frame,
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.level = .screenSaver
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
+        panel.ignoresMouseEvents = false
+        panel.contentView = content
+        return panel
     }
 
     private func completeSelection(displayID: CGDirectDisplayID, screen: NSScreen, rect: CGRect) {
@@ -133,6 +142,30 @@ final class OverlayPresenter {
         }
     }
 
+    private func loadWindowsForPicker() async {
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            for view in pickerViews {
+                guard let screen = view.window?.screen, let displayID = screen.sniprDisplayID else { continue }
+                let entries: [WindowPickerNSView.WindowEntry] = content.windows.compactMap { window in
+                    let frame = window.frame
+                    guard frame.intersects(CGDisplayBounds(displayID)) else { return nil }
+                    let frameInScreen = displayBoundsToScreenPoints(frame, displayID: displayID, screen: screen)
+                    return WindowPickerNSView.WindowEntry(
+                        frame: frameInScreen,
+                        scWindowID: window.windowID,
+                        title: window.title,
+                        appName: window.owningApplication?.applicationName
+                    )
+                }
+                view.setWindows(entries)
+            }
+        } catch {
+            // Non-fatal: picker still cancels on right-click / Esc even with
+            // no entries; we'd rather show an empty picker than a hang.
+        }
+    }
+
     private func distributeWindowList(content: SCShareableContent) {
         for view in hostViews {
             guard let displayID = view.window?.screen?.sniprDisplayID,
@@ -140,13 +173,12 @@ final class OverlayPresenter {
                 continue
             }
 
-            let windowsForDisplay: [(rect: CGRect, scWindowID: CGWindowID, title: String?, app: String?)] = content.windows.compactMap { window in
+            let rectsForDisplay: [CGRect] = content.windows.compactMap { window in
                 let frame = window.frame
                 guard frame.intersects(CGDisplayBounds(displayID)) else { return nil }
-                let frameInScreen = displayBoundsToScreenPoints(frame, displayID: displayID, screen: screen)
-                return (frameInScreen, window.windowID, window.title, window.owningApplication?.applicationName)
+                return displayBoundsToScreenPoints(frame, displayID: displayID, screen: screen)
             }
-            view.setSnapEdges(windowsForDisplay.map(\.rect))
+            view.setSnapEdges(rectsForDisplay)
         }
     }
 
@@ -163,8 +195,6 @@ final class OverlayPresenter {
             configuration.showsCursor = false
             configuration.capturesAudio = false
 
-            // Build the filter excluding the overlay windows themselves so
-            // the loupe doesn't sample our own dim layer back to the user.
             let overlayCGWindows = overlayWindows.compactMap { $0.windowNumber }
             let excluded = content.windows.filter { window in
                 overlayCGWindows.contains(Int(window.windowID))
@@ -183,10 +213,6 @@ final class OverlayPresenter {
         }
     }
 
-    /// Convert a `CGRect` from the global display coordinate space (where
-    /// `CGDisplayBounds` lives, with origin top-left) to the per-screen point
-    /// space the overlay uses (also top-left origin, but framed at the
-    /// screen, since the overlay panel was sized to `screen.frame`).
     private func displayBoundsToScreenPoints(_ rect: CGRect, displayID: CGDirectDisplayID, screen: NSScreen) -> CGRect {
         let displayBounds = CGDisplayBounds(displayID)
         let scaleX = screen.frame.width / displayBounds.width

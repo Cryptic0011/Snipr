@@ -51,6 +51,10 @@ final class SniprAppModel {
             coordinator.startCaptureArea()
         case .captureToolbar:
             coordinator.showCaptureToolbar()
+        case .captureWindow:
+            coordinator.startWindowCapture()
+        case .captureLastRegion:
+            coordinator.captureLastRegion()
         case .screenRecord:
             coordinator.startScreenRecordingArea()
         case .commandPalette:

@@ -62,7 +62,6 @@ private enum DashboardTab: String, CaseIterable, Identifiable {
     case overview
     case captures
     case permissions
-    case storage
 
     var id: String { rawValue }
 
@@ -74,8 +73,6 @@ private enum DashboardTab: String, CaseIterable, Identifiable {
             "Captures"
         case .permissions:
             "Permissions"
-        case .storage:
-            "Settings"
         }
     }
 
@@ -87,8 +84,6 @@ private enum DashboardTab: String, CaseIterable, Identifiable {
             "photo.stack"
         case .permissions:
             "lock.shield"
-        case .storage:
-            "gearshape"
         }
     }
 
@@ -219,9 +214,6 @@ private struct DashboardPane: View {
             case .permissions:
                 PermissionsPanel(model: model, compact: false)
                     .frame(maxHeight: .infinity)
-            case .storage:
-                StoragePanel(model: model)
-                    .frame(maxHeight: .infinity)
             }
         }
     }
@@ -330,104 +322,6 @@ private struct RecentCapturesPanel: View {
                 }
             }
         }
-    }
-}
-
-private struct StoragePanel: View {
-    let model: SniprAppModel
-
-    var body: some View {
-        GlassPanel {
-            VStack(alignment: .leading, spacing: 22) {
-                Text("Settings")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-
-                Text("Tune stack behavior and manage the local capture folder.")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.54))
-
-                VStack(spacing: 0) {
-                    StorageRow(title: "More Settings", value: "Open full preferences and hotkeys", systemImage: "gearshape", actionTitle: "Open") {
-                        model.coordinator.openSettingsWindow()
-                    }
-
-                    DividerLine()
-
-                    StorageRow(title: "Capture Folder", value: model.captureStore.rootDirectory.path, systemImage: "folder", actionTitle: "Reveal") {
-                        NSWorkspace.shared.activateFileViewerSelecting([model.captureStore.rootDirectory])
-                    }
-
-                    DividerLine()
-
-                    StorageRow(title: "Stored Captures", value: "\(model.captureStore.items.count)", systemImage: "photo.stack", actionTitle: "Show") {
-                        model.coordinator.showThumbnailStack()
-                    }
-
-                    DividerLine()
-
-                    StorageRow(
-                        title: "Stack Behavior",
-                        value: stackBehaviorSummary,
-                        systemImage: "timer",
-                        actionTitle: model.preferences.autoHideStack ? "Disable" : "Enable"
-                    ) {
-                        model.preferences.autoHideStack.toggle()
-                    }
-
-                    DividerLine()
-
-                    StorageRow(title: "Clear Local Stack", value: "Remove capture history and files", systemImage: "trash", actionTitle: "Clear") {
-                        model.coordinator.clearStack()
-                    }
-                }
-            }
-        }
-    }
-
-    private var stackBehaviorSummary: String {
-        guard model.preferences.showStackAfterCapture else {
-            return "Hidden after capture"
-        }
-
-        guard model.preferences.autoHideStack else {
-            return "Stays visible until closed"
-        }
-
-        let hoverText = model.preferences.pauseStackAutoHideOnHover ? ", hover pauses" : ""
-        return "Hides after \(Int(model.preferences.stackAutoHideDelay))s\(hoverText)"
-    }
-}
-
-private struct StorageRow: View {
-    let title: String
-    let value: String
-    let systemImage: String
-    let actionTitle: String
-    let action: () -> Void
-
-    var body: some View {
-        HStack(spacing: 18) {
-            Image(systemName: systemImage)
-                .font(.system(size: 20, weight: .medium))
-                .foregroundStyle(.white.opacity(0.82))
-                .frame(width: 28)
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text(title)
-                    .font(.system(size: 15, weight: .bold))
-
-                Text(value)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.48))
-                    .lineLimit(2)
-            }
-
-            Spacer()
-
-            Button(actionTitle, action: action)
-                .buttonStyle(OutlineStatusButtonStyle(isGranted: true))
-        }
-        .padding(.vertical, 13)
     }
 }
 
