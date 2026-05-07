@@ -42,7 +42,11 @@ final class MagnifierLoupeView: NSView {
         return String(format: "#%02X%02X%02X", sampledRGB.0, sampledRGB.1, sampledRGB.2)
     }
 
-    override var isFlipped: Bool { true }
+    // Intentionally unflipped. AppKit applies a flip CTM in flipped views,
+    // which renders the cropped CGImage in `drawZoomedSource` upside down.
+    // None of the drawing in this view (centered crosshair, full-bounds
+    // image) depends on top-left vs bottom-left orientation, so leaving
+    // the view unflipped is the simplest fix.
 
     override func draw(_ dirtyRect: NSRect) {
         let context = NSGraphicsContext.current?.cgContext
