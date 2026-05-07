@@ -9,12 +9,20 @@ final class SniprAppModel {
     let coordinator: WindowCoordinator
     private var hotKeyService: HotKeyService?
 
-    init() {
+    init(
+        captureEngine: CaptureEngine = SCKCaptureEngine(),
+        recordingEngine: RecordingEngine = SCKRecordingEngine()
+    ) {
         let captureStore = CaptureStore()
         let preferences = SniprPreferences()
         self.captureStore = captureStore
         self.preferences = preferences
-        self.coordinator = WindowCoordinator(captureStore: captureStore, preferences: preferences)
+        self.coordinator = WindowCoordinator(
+            captureStore: captureStore,
+            preferences: preferences,
+            captureEngine: captureEngine,
+            recordingEngine: recordingEngine
+        )
     }
 
     func installHotkeys() {

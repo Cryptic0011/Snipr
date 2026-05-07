@@ -1,0 +1,132 @@
+import AppKit
+import Observation
+import SwiftUI
+
+/// Router that forwards capture / record / preview commands to the appropriate
+/// presenter. Heavy lifting lives in `Presenters/*` and
+/// `WindowCoordinator+Selection.swift`; this file stays small enough to scan
+/// in one screen.
+@MainActor
+@Observable
+final class WindowCoordinator {
+    let captureStore: CaptureStore
+    let preferences: SniprPreferences
+    let captureEngine: CaptureEngine
+    let overlayPresenter: OverlayPresenter
+    let stackPresenter: StackPresenter
+    let recordingPresenter: RecordingPresenter
+    let previewPresenter: PreviewPresenter
+    private var commandPalettePresenter: CommandPalettePresenter?
+    private var captureToolbarPresenter: CaptureToolbarPresenter?
+
+    init(
+        captureStore: CaptureStore,
+        preferences: SniprPreferences,
+        captureEngine: CaptureEngine,
+        recordingEngine: RecordingEngine
+    ) {
+        self.captureStore = captureStore
+        self.preferences = preferences
+        self.captureEngine = captureEngine
+        self.overlayPresenter = OverlayPresenter()
+        self.stackPresenter = StackPresenter(captureStore: captureStore, preferences: preferences)
+        self.recordingPresenter = RecordingPresenter(recordingEngine: recordingEngine, captureStore: captureStore)
+        self.previewPresenter = PreviewPresenter(captureStore: captureStore)
+        wirePresenters()
+    }
+
+    func execute(_ command: SniprCommand) {
+        switch command.id {
+        case .captureArea: startCaptureArea()
+        case .recordArea: startScreenRecordingArea()
+        case .captureToolbar: showCaptureToolbar()
+        case .openHistory:
+            NSApp.activate(ignoringOtherApps: true)
+            NSApp.windows.first?.makeKeyAndOrderFront(nil)
+        case .clearStack: clearStack()
+        case .openSettings: openSettingsWindow()
+        case .quit: NSApp.terminate(nil)
+        }
+    }
+
+    func executeCaptureToolbarMode(_ mode: CaptureToolbarMode) {
+        hideCaptureToolbar()
+        switch mode {
+        case .captureScreen: startCaptureFullScreen()
+        case .captureWindow: showWindowCaptureComingSoon()
+        case .captureSelection: startCaptureArea()
+        case .recordScreen: startScreenRecordingFullScreen()
+        case .recordSelection: startScreenRecordingArea()
+        }
+    }
+
+    func startCaptureArea() {
+        guard ensureScreenRecordingAccess() else { return }
+        overlayPresenter.showCaptureOverlays(mode: .screenshot)
+    }
+
+    func startScreenRecordingArea() {
+        guard !recordingPresenter.isRecording, ensureScreenRecordingAccess() else { return }
+        overlayPresenter.showCaptureOverlays(mode: .recording)
+    }
+
+    func startCaptureFullScreen() {
+        guard ensureScreenRecordingAccess(),
+              let screen = NSScreen.main, let displayID = screen.sniprDisplayID else { return }
+        completeCapture(displayID: displayID, screen: screen, rect: CGRect(origin: .zero, size: screen.frame.size))
+    }
+
+    func startScreenRecordingFullScreen() {
+        guard !recordingPresenter.isRecording, ensureScreenRecordingAccess(),
+              let screen = NSScreen.main, let displayID = screen.sniprDisplayID else { return }
+        recordingPresenter.start(displayID: displayID, screen: screen, rect: CGRect(origin: .zero, size: screen.frame.size))
+    }
+
+    func showThumbnailStack() { stackPresenter.show() }
+    func hideThumbnailStack() { stackPresenter.hide() }
+    func setThumbnailStackPinned(_ pinned: Bool) { stackPresenter.setPinned(pinned) }
+    func setThumbnailStackHovering(_ hovered: Bool) { stackPresenter.setHovering(hovered) }
+    var isThumbnailStackPinned: Bool { stackPresenter.isPinned }
+
+    func openPreview(for item: CaptureItem) { previewPresenter.openPreview(for: item) }
+    func copy(_ item: CaptureItem) { ImageTransfer.copy(item) }
+    func saveAs(_ item: CaptureItem) { ImageTransfer.saveAs(item) }
+    func reveal(_ item: CaptureItem) { NSWorkspace.shared.activateFileViewerSelecting([item.fileURL]) }
+
+    func delete(_ item: CaptureItem) {
+        previewPresenter.delete(item)
+        showThumbnailStack()
+    }
+
+    func clearStack() {
+        do { try captureStore.clear(); hideThumbnailStack() }
+        catch { NSAlert(error: error).runModal() }
+    }
+
+    func stopScreenRecording() { recordingPresenter.stop() }
+    func cancelScreenRecording() { recordingPresenter.cancel() }
+
+    func showCommandPalette() {
+        if commandPalettePresenter == nil { commandPalettePresenter = CommandPalettePresenter(coordinator: self) }
+        commandPalettePresenter?.show()
+    }
+    func hideCommandPalette() { commandPalettePresenter?.hide() }
+
+    func showCaptureToolbar() {
+        if captureToolbarPresenter == nil { captureToolbarPresenter = CaptureToolbarPresenter(coordinator: self) }
+        captureToolbarPresenter?.show()
+    }
+    func hideCaptureToolbar() { captureToolbarPresenter?.hide() }
+
+    func openMainWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        if let window = NSApp.windows.first(where: { $0.title == "Snipr" }) ?? NSApp.windows.first(where: { $0.canBecomeMain }) {
+            window.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    func openSettingsWindow() {
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
