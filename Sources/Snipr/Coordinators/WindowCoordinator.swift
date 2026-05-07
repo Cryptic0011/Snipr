@@ -149,11 +149,10 @@ final class WindowCoordinator {
         overlayPresenter.onSelectionComplete = { [weak self] mode, displayID, screen, rect in
             self?.handleSelection(mode: mode, displayID: displayID, screen: screen, rect: rect)
         }
-        overlayPresenter.onWindowPicked = { [weak self] entry, displayID, screen, rect in
-            self?.captureFlowPresenter.completeCapture(
+        overlayPresenter.onWindowPicked = { [weak self] entry, displayID, _, _ in
+            self?.captureFlowPresenter.captureWindow(
+                scWindowID: entry.scWindowID,
                 displayID: displayID,
-                screen: screen,
-                rect: rect,
                 windowTitle: entry.title,
                 appName: entry.appName
             )

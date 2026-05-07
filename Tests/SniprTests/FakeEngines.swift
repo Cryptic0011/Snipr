@@ -33,8 +33,15 @@ final class FakeCaptureEngine: CaptureEngine {
         return context.makeImage()!
     }
 
+    var windowInvocations: [CGWindowID] = []
+
     func capture(displayID: CGDirectDisplayID, rectInDisplayPoints: CGRect, screen: NSScreen) async throws -> CapturedImage {
         invocations.append(Invocation(displayID: displayID, rectInDisplayPoints: rectInDisplayPoints, screen: screen))
+        return try stubbedResult.get()
+    }
+
+    func captureWindow(scWindowID: CGWindowID) async throws -> CapturedImage {
+        windowInvocations.append(scWindowID)
         return try stubbedResult.get()
     }
 }

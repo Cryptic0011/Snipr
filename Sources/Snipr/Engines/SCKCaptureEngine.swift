@@ -68,4 +68,60 @@ struct SCKCaptureEngine: CaptureEngine {
             pixelSize: CGSize(width: cgImage.width, height: cgImage.height)
         )
     }
+
+    func captureWindow(scWindowID: CGWindowID) async throws -> CapturedImage {
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        guard let window = content.windows.first(where: { $0.windowID == scWindowID }) else {
+            throw ScreenCaptureError.displayNotFound
+        }
+
+        // Window pixel size: SCWindow.frame is in display points. Multiply by
+        // backing scale of the host screen so SCK doesn't downsample the
+        // configuration. Falling back to 2× for headless/unmapped cases.
+        let backingScale: CGFloat = NSScreen.screens.first(where: { screen in
+            screen.frame.intersects(window.frame)
+        })?.backingScaleFactor ?? 2.0
+        let pixelWidth = max(2, Int((window.frame.width * backingScale).rounded()))
+        let pixelHeight = max(2, Int((window.frame.height * backingScale).rounded()))
+
+        let configuration = SCStreamConfiguration()
+        configuration.width = pixelWidth
+        configuration.height = pixelHeight
+        configuration.scalesToFit = false
+        configuration.showsCursor = false
+        configuration.capturesAudio = false
+
+        let filter = SCContentFilter(desktopIndependentWindow: window)
+
+        let cgImage: CGImage
+        do {
+            cgImage = try await SCScreenshotManager.captureImage(
+                contentFilter: filter,
+                configuration: configuration
+            )
+        } catch {
+            throw ScreenCaptureError.imageCreationFailed
+        }
+
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            data,
+            UTType.png.identifier as CFString,
+            1,
+            nil
+        ) else {
+            throw ScreenCaptureError.pngEncodingFailed
+        }
+
+        CGImageDestinationAddImage(destination, cgImage, nil)
+        guard CGImageDestinationFinalize(destination) else {
+            throw ScreenCaptureError.pngEncodingFailed
+        }
+
+        return CapturedImage(
+            cgImage: cgImage,
+            pngData: data as Data,
+            pixelSize: CGSize(width: cgImage.width, height: cgImage.height)
+        )
+    }
 }

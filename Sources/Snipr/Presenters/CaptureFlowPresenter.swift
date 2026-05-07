@@ -60,6 +60,66 @@ final class CaptureFlowPresenter {
         }
     }
 
+    /// Capture a single on-screen window via SCK's
+    /// `SCContentFilter(desktopIndependentWindow:)`. Different code path from
+    /// `completeCapture` because the engine call is window-scoped, not
+    /// display-rect-scoped — overlapping content is excluded.
+    func captureWindow(scWindowID: CGWindowID, displayID: CGDirectDisplayID, windowTitle: String?, appName: String?) {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            await self?.storeWindowCapture(
+                scWindowID: scWindowID,
+                displayID: displayID,
+                windowTitle: windowTitle,
+                appName: appName
+            )
+        }
+    }
+
+    private func storeWindowCapture(
+        scWindowID: CGWindowID,
+        displayID: CGDirectDisplayID,
+        windowTitle: String?,
+        appName: String?
+    ) async {
+        do {
+            let captured = try await captureEngine.captureWindow(scWindowID: scWindowID)
+
+            captureSequence &+= 1
+            let format = preferences.captureFormat
+            let encoded = captured.encode(as: format) ?? captured.pngData
+
+            let suggestedFilename = CaptureFilenameTemplate.expand(
+                template: preferences.captureFilenameTemplate,
+                date: Date(),
+                appName: appName,
+                windowTitle: windowTitle,
+                pixelSize: captured.pixelSize,
+                sequence: captureSequence,
+                fileExtension: format.fileExtension
+            )
+
+            if preferences.copyToClipboardOnCapture {
+                ClipboardSink.copy(data: encoded, format: format)
+            }
+
+            if preferences.saveToDiskOnCapture {
+                _ = try captureStore.addCapture(
+                    pngData: encoded,
+                    pixelSize: captured.pixelSize,
+                    displayID: displayID,
+                    fileExtension: format.fileExtension,
+                    suggestedFilename: suggestedFilename
+                )
+                onCaptureStored?()
+            }
+            // Don't update lastRegion for window captures — recall is for
+            // user-drawn rects.
+        } catch {
+            onError?(error)
+        }
+    }
+
     func captureLastRegion() {
         guard let last = lastRegion else { return }
         guard let screen = NSScreen.screens.first(where: { $0.frame == last.screenFrame }) ?? NSScreen.main else {

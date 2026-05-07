@@ -76,4 +76,9 @@ protocol CaptureEngine: Sendable {
         rectInDisplayPoints: CGRect,
         screen: NSScreen
     ) async throws -> CapturedImage
+
+    /// Capture exactly the pixels of the given on-screen window. Implementations
+    /// build a desktop-independent SCK filter scoped to the window so overlapping
+    /// content (other windows, menu bar) doesn't bleed into the result.
+    func captureWindow(scWindowID: CGWindowID) async throws -> CapturedImage
 }
