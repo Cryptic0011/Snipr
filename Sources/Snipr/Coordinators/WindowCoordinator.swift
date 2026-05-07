@@ -131,10 +131,47 @@ final class WindowCoordinator {
                          onSave: { [weak self] in self?.saveAs(item) })
     }
 
+    private var ocrHistoryWindow: NSWindow?
+    private var ocrHistoryCloseObserver: NSObjectProtocol?
+
     func showOCRHistory() {
-        // Surfaced in the command palette via `SniprCommand`. Selecting an
-        // entry there calls `recopyOCREntry(_:)` directly.
-        showCommandPalette()
+        if let window = ocrHistoryWindow {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        let view = OCRHistoryView(coordinator: self, history: ocrHistory)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 420),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "OCR History"
+        window.contentView = NSHostingView(rootView: view)
+        window.center()
+        window.isReleasedWhenClosed = false
+        ocrHistoryWindow = window
+
+        // Drop the cached reference when the user closes the window so the
+        // next invocation rebuilds it (and observes the latest entries).
+        ocrHistoryCloseObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            MainActor.assumeIsolated {
+                if let observer = self.ocrHistoryCloseObserver {
+                    NotificationCenter.default.removeObserver(observer)
+                }
+                self.ocrHistoryCloseObserver = nil
+                self.ocrHistoryWindow = nil
+            }
+        }
+
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     func recopyOCREntry(_ entry: OCRHistoryEntry) {
