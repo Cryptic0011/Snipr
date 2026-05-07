@@ -32,12 +32,12 @@ struct ContentView: View {
             }
         }
         .foregroundStyle(.white)
-        .task {
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                permissionRefreshTick += 1
-                _ = permissionRefreshTick
-            }
+        // Re-evaluate permission status when the user grants access in
+        // System Settings and switches back to Snipr. Cheaper and more
+        // accurate than the previous 1 Hz polling loop.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            permissionRefreshTick += 1
+            _ = permissionRefreshTick
         }
     }
 
