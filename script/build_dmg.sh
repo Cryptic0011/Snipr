@@ -11,7 +11,7 @@ APP_ICON="$APP_BUNDLE/Contents/Resources/SniprAppIcon.icns"
 DMG_ROOT="$DIST_DIR/dmg-root"
 DMG_PATH="$DIST_DIR/$APP_NAME-$VERSION.dmg"
 
-"$ROOT_DIR/script/build_and_run.sh" --build-only
+SNIPR_VERSION="$VERSION" "$ROOT_DIR/script/build_and_run.sh" --build-only
 
 rm -rf "$DMG_ROOT" "$DMG_PATH"
 mkdir -p "$DMG_ROOT"
