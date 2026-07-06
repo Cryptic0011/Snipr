@@ -18,10 +18,20 @@ final class SCKRecordingEngine: NSObject, RecordingEngine {
     private var pixelSize: CGSize = .zero
     private var destinationURL: URL?
     private var isStreamRunning = false
+    private var isStopping = false
     private var streamOutputAdapter: SCKStreamOutputAdapter?
+
+    var onUnexpectedStop: ((Error) -> Void)?
 
     var isRecording: Bool {
         isStreamRunning
+    }
+
+    private func handleStreamStopped(_ error: Error) {
+        // A user-initiated stop()/cancel() is already routing the error
+        // through the finish continuation; only unrequested deaths matter.
+        guard isStreamRunning, !isStopping else { return }
+        onUnexpectedStop?(error)
     }
 
     func start(
@@ -111,7 +121,9 @@ final class SCKRecordingEngine: NSObject, RecordingEngine {
 
         state.assignWriter(writer, input: writerInput, audioInput: audioInput)
 
-        let adapter = SCKStreamOutputAdapter(state: state)
+        let adapter = SCKStreamOutputAdapter(state: state) { [weak self] error in
+            Task { @MainActor in self?.handleStreamStopped(error) }
+        }
         let stream = SCStream(filter: filter, configuration: configuration, delegate: adapter)
         try stream.addStreamOutput(adapter, type: .screen, sampleHandlerQueue: queue)
         if options.capturesSystemAudio {
@@ -144,6 +156,7 @@ final class SCKRecordingEngine: NSObject, RecordingEngine {
         guard let stream, let destinationURL else {
             throw ScreenRecordingError.notRecording
         }
+        isStopping = true
 
         do {
             try await stream.stopCapture()
@@ -153,19 +166,24 @@ final class SCKRecordingEngine: NSObject, RecordingEngine {
             // it to disk.
         }
 
+        // Reset even when finalizing throws — otherwise one failed
+        // finishWriting leaves `stream` non-nil and every later start()
+        // fails with `alreadyRecording` until app restart.
+        defer {
+            self.stream = nil
+            self.streamOutputAdapter = nil
+            self.destinationURL = nil
+            self.pixelSize = .zero
+            isStreamRunning = false
+            isStopping = false
+        }
+
         let pixelSize = self.pixelSize
-        let video: RecordedVideo = try await withCheckedThrowingContinuation { continuation in
+        return try await withCheckedThrowingContinuation { continuation in
             queue.async { [state] in
                 state.finishWriting(destinationURL: destinationURL, pixelSize: pixelSize, continuation: continuation)
             }
         }
-
-        self.stream = nil
-        self.streamOutputAdapter = nil
-        self.destinationURL = nil
-        self.pixelSize = .zero
-        isStreamRunning = false
-        return video
     }
 
     func cancel() {
@@ -202,9 +220,11 @@ final class SCKRecordingEngine: NSObject, RecordingEngine {
 /// Bridges SCK's nonisolated delegate callbacks into our serial queue.
 private final class SCKStreamOutputAdapter: NSObject, SCStreamOutput, SCStreamDelegate {
     let state: SCKRecordingState
+    let onStopped: @Sendable (Error) -> Void
 
-    init(state: SCKRecordingState) {
+    init(state: SCKRecordingState, onStopped: @escaping @Sendable (Error) -> Void) {
         self.state = state
+        self.onStopped = onStopped
     }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {
@@ -229,6 +249,7 @@ private final class SCKStreamOutputAdapter: NSObject, SCStreamOutput, SCStreamDe
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
         state.failWithError(error)
+        onStopped(error)
     }
 }
 

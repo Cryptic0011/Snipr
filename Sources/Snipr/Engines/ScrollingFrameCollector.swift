@@ -23,8 +23,19 @@ final class ScrollingFrameCollector {
     private let state = ScrollingFrameState()
     private let progressUpdate: @MainActor (Int) -> Void
 
+    /// Fired when the stream dies without stop()/cancel() being called —
+    /// e.g. the target window closed or its display disconnected mid-scroll.
+    var onUnexpectedStop: ((Error) -> Void)?
+
     init(progressUpdate: @escaping @MainActor (Int) -> Void = { _ in }) {
         self.progressUpdate = progressUpdate
+    }
+
+    private func handleStreamStopped(_ error: Error) {
+        guard stream != nil else { return }
+        stream = nil
+        output = nil
+        onUnexpectedStop?(error)
     }
 
     // Retain every Nth delivered frame (~10 fps out of the 30 fps source) and
@@ -94,12 +105,20 @@ final class ScrollingFrameCollector {
 
         let filter = SCContentFilter(display: scDisplay, excludingWindows: [])
 
-        let adapter = ScrollingStreamOutputAdapter(state: state) { [weak self] cumulativePixels in
-            // Hop to MainActor for UI updates.
-            Task { @MainActor in
-                self?.progressUpdate(cumulativePixels)
+        let adapter = ScrollingStreamOutputAdapter(
+            state: state,
+            progressUpdate: { [weak self] cumulativePixels in
+                // Hop to MainActor for UI updates.
+                Task { @MainActor in
+                    self?.progressUpdate(cumulativePixels)
+                }
+            },
+            streamStopped: { [weak self] error in
+                Task { @MainActor in
+                    self?.handleStreamStopped(error)
+                }
             }
-        }
+        )
         let stream = SCStream(filter: filter, configuration: configuration, delegate: adapter)
         try stream.addStreamOutput(adapter, type: .screen, sampleHandlerQueue: queue)
 
@@ -161,10 +180,16 @@ final class ScrollingFrameCollector {
 private final class ScrollingStreamOutputAdapter: NSObject, SCStreamOutput, SCStreamDelegate {
     let state: ScrollingFrameState
     let progressUpdate: (Int) -> Void
+    let streamStopped: @Sendable (Error) -> Void
 
-    init(state: ScrollingFrameState, progressUpdate: @escaping (Int) -> Void) {
+    init(
+        state: ScrollingFrameState,
+        progressUpdate: @escaping (Int) -> Void,
+        streamStopped: @escaping @Sendable (Error) -> Void
+    ) {
         self.state = state
         self.progressUpdate = progressUpdate
+        self.streamStopped = streamStopped
     }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {
@@ -185,11 +210,10 @@ private final class ScrollingStreamOutputAdapter: NSObject, SCStreamOutput, SCSt
     }
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        // Surface a stream death (e.g. the target window closing) instead of
-        // failing silently into an empty-frames "no frames" error later.
         SniprDiagnostics.windowing.error(
             "ScrollingCapture stream stopped error=\(String(describing: error), privacy: .public)"
         )
+        streamStopped(error)
     }
 
     // CIContext is expensive; one per adapter, not one per frame.

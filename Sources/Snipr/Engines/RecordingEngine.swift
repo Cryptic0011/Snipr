@@ -54,6 +54,12 @@ struct RecordingOptions: Sendable {
 protocol RecordingEngine: AnyObject {
     var isRecording: Bool { get }
 
+    /// Fired when the stream dies without the user asking it to (display
+    /// disconnect, window server restart). Gives the presenter a chance to
+    /// tear down the HUD and salvage the partial file instead of showing
+    /// "recording" forever.
+    var onUnexpectedStop: ((Error) -> Void)? { get set }
+
     func start(
         displayID: CGDirectDisplayID,
         rectInDisplayPoints: CGRect,

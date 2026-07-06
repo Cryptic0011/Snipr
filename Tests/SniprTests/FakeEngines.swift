@@ -60,6 +60,7 @@ final class FakeRecordingEngine: RecordingEngine {
     var stopCalls = 0
     var cancelCalls = 0
     var isRecording = false
+    var onUnexpectedStop: ((Error) -> Void)?
     var stubbedStartError: Error?
     var stubbedStopResult: Result<RecordedVideo, Error>?
 

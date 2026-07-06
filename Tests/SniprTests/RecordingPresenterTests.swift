@@ -74,6 +74,24 @@ final class RecordingPresenterTests: XCTestCase {
     /// `cancel()` is synchronous and must short-circuit the engine even
     /// before any frames are written — it's called when the user hits the X
     /// in the recording HUD.
+    /// A stream that dies without the user asking (display disconnect) must
+    /// surface the error and run the stop path so the HUD comes down and the
+    /// partial file is finalized — not stay "recording" forever.
+    func testUnexpectedStreamStopSurfacesErrorAndStops() async throws {
+        let store = CaptureStore(rootDirectory: tempRoot)
+        let engine = FakeRecordingEngine()
+        let presenter = RecordingPresenter(recordingEngine: engine, captureStore: store)
+
+        var receivedError: Error?
+        presenter.onError = { receivedError = $0 }
+
+        engine.isRecording = true
+        engine.onUnexpectedStop?(ScreenRecordingError.recordingFailed)
+
+        try await waitFor(timeout: 2) { engine.stopCalls == 1 }
+        XCTAssertNotNil(receivedError)
+    }
+
     func testCancelCallsEngineImmediately() {
         let store = CaptureStore(rootDirectory: tempRoot)
         let engine = FakeRecordingEngine()

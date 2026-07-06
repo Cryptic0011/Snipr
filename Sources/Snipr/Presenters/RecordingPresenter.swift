@@ -25,6 +25,18 @@ final class RecordingPresenter {
         self.recordingEngine = recordingEngine
         self.captureStore = captureStore
         self.preferences = preferences
+        recordingEngine.onUnexpectedStop = { [weak self] error in
+            self?.handleUnexpectedStop(error)
+        }
+    }
+
+    /// The stream died without the user asking (display disconnect, window
+    /// server restart). Tell the user why, then run the normal stop path so
+    /// the partial recording is finalized and the HUD comes down instead of
+    /// showing "recording" forever.
+    private func handleUnexpectedStop(_ error: Error) {
+        onError?(error)
+        stop()
     }
 
     var isRecording: Bool {

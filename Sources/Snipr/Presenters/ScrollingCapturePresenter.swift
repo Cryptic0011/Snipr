@@ -40,6 +40,14 @@ final class ScrollingCapturePresenter {
         self.collector = collector ?? ScrollingFrameCollector(progressUpdate: { pixels in
             progressModel.update(capturedPixels: pixels)
         })
+        // Stream death mid-scroll (window closed, display disconnected):
+        // tell the user, then salvage whatever frames were already collected
+        // instead of leaving the HUD "recording" a dead stream.
+        self.collector.onUnexpectedStop = { [weak self] error in
+            guard let self else { return }
+            self.onError?(error)
+            self.stopAndStitch()
+        }
     }
 
     /// Start collecting frames against the given on-screen window. Shows a
