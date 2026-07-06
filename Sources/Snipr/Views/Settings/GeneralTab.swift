@@ -5,18 +5,30 @@ import SwiftUI
 /// (the `model` reference and `Section`s are copy/moved verbatim).
 struct GeneralSettingsTab: View {
     let model: SniprAppModel
+    @State private var hasScreenRecordingAccess = PermissionService.hasScreenRecordingAccess
 
     var body: some View {
         Form {
             Section("Permissions") {
                 LabeledContent("Screen Recording") {
-                    Text(PermissionService.hasScreenRecordingAccess ? "Allowed" : "Required")
-                        .foregroundStyle(PermissionService.hasScreenRecordingAccess ? .green : .orange)
+                    Text(hasScreenRecordingAccess ? "Allowed" : "Required")
+                        .foregroundStyle(hasScreenRecordingAccess ? .green : .orange)
+                }
+
+                if !hasScreenRecordingAccess {
+                    Text("After enabling Snipr in System Settings, relaunch Snipr — macOS applies the permission on the next launch.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Button("Open Screen Recording Settings") {
                     PermissionService.openScreenRecordingSettings()
                 }
+            }
+            // Re-check when the user comes back from System Settings so the
+            // status flips without reopening the window.
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                hasScreenRecordingAccess = PermissionService.hasScreenRecordingAccess
             }
 
             Section("Stack") {

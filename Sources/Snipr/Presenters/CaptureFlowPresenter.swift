@@ -236,7 +236,23 @@ final class CaptureFlowPresenter {
         if PermissionService.hasScreenRecordingAccess || PermissionService.requestScreenRecordingAccess() {
             return true
         }
-        PermissionService.openScreenRecordingSettings()
+
+        // The system prompt from CGRequestScreenCaptureAccess only ever shows
+        // once per install; every later denial lands here. Explain what to do
+        // instead of silently bouncing the user into System Settings.
+        let alert = NSAlert()
+        alert.messageText = "Snipr needs Screen Recording permission"
+        alert.informativeText = """
+        Enable Snipr under System Settings → Privacy & Security → \
+        Screen Recording, then relaunch Snipr — macOS applies the \
+        permission on the next launch.
+        """
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate()
+        if alert.runModal() == .alertFirstButtonReturn {
+            PermissionService.openScreenRecordingSettings()
+        }
         return false
     }
 }
