@@ -4,3 +4,4 @@
 dist/
 *.xcuserdata/
 DerivedData/
+graphify-out/
