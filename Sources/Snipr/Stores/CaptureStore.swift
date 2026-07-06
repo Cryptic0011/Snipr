@@ -154,6 +154,12 @@ final class CaptureStore {
 
             items = decodedItems.filter { fileManager.fileExists(atPath: $0.fileURL.path) }
         } catch {
+            // Never let a corrupt/unreadable index silently erase history:
+            // the next persist() would overwrite it and make the loss
+            // permanent. Move it aside so it stays recoverable, then start
+            // with an empty index.
+            let backupURL = indexURL.appendingPathExtension("corrupt-\(Int(Date().timeIntervalSince1970))")
+            try? fileManager.moveItem(at: indexURL, to: backupURL)
             items = []
         }
     }

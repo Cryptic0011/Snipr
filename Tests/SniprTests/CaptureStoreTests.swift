@@ -106,4 +106,18 @@ final class CaptureStoreTests: XCTestCase {
             0x42, 0x60, 0x82
         ])
     }
+
+    func testCorruptIndexIsMovedAsideNotOverwritten() throws {
+        let indexURL = tempRoot.appending(path: "captures.json")
+        try Data("not json {{{".utf8).write(to: indexURL)
+
+        let store = CaptureStore(rootDirectory: tempRoot)
+        XCTAssertTrue(store.items.isEmpty)
+
+        // The unreadable index must survive as a recoverable backup file.
+        let backups = try FileManager.default.contentsOfDirectory(atPath: tempRoot.path)
+            .filter { $0.hasPrefix("captures.json.corrupt-") }
+        XCTAssertEqual(backups.count, 1)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: indexURL.path))
+    }
 }
