@@ -103,6 +103,7 @@ final class SniprPreferencesTests: XCTestCase {
         let preferences = SniprPreferences(defaults: defaults)
         XCTAssertTrue(preferences.copyToClipboardOnCapture)
         XCTAssertTrue(preferences.saveToDiskOnCapture)
+        XCTAssertFalse(preferences.showCaptureMagnifier)
         XCTAssertEqual(preferences.captureFormat, .png)
         XCTAssertEqual(preferences.captureFilenameTemplate, "Snipr {date} {time}")
     }
@@ -115,14 +116,40 @@ final class SniprPreferencesTests: XCTestCase {
         let preferences = SniprPreferences(defaults: defaults)
         preferences.copyToClipboardOnCapture = false
         preferences.saveToDiskOnCapture = false
+        preferences.showCaptureMagnifier = true
         preferences.captureFormat = .jpeg(quality: 0.7)
         preferences.captureFilenameTemplate = "{app} {date}"
 
         let reloaded = SniprPreferences(defaults: defaults)
         XCTAssertFalse(reloaded.copyToClipboardOnCapture)
         XCTAssertFalse(reloaded.saveToDiskOnCapture)
+        XCTAssertTrue(reloaded.showCaptureMagnifier)
         XCTAssertEqual(reloaded.captureFormat, .jpeg(quality: 0.7))
         XCTAssertEqual(reloaded.captureFilenameTemplate, "{app} {date}")
+    }
+
+    @MainActor
+    func testScrollingCaptureReEnableMigrationRunsOnce() throws {
+        let (defaults, suiteName) = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        // Simulate an install that persisted the old disabled default.
+        let preferences = SniprPreferences(defaults: defaults)
+        var legacy = preferences.binding(for: .scrollingCapture)
+        legacy.isEnabled = false
+        preferences.setHotKeyBinding(legacy, for: .scrollingCapture)
+        defaults.removeObject(forKey: "didEnableScrollingCapture")
+
+        // First reload migrates the stale disabled binding to the new default.
+        let migrated = SniprPreferences(defaults: defaults)
+        XCTAssertTrue(migrated.binding(for: .scrollingCapture).isEnabled)
+
+        // A user who disables it afterwards stays disabled — one-shot only.
+        var disabled = migrated.binding(for: .scrollingCapture)
+        disabled.isEnabled = false
+        migrated.setHotKeyBinding(disabled, for: .scrollingCapture)
+        let reloaded = SniprPreferences(defaults: defaults)
+        XCTAssertFalse(reloaded.binding(for: .scrollingCapture).isEnabled)
     }
 
     private func makeDefaults() throws -> (UserDefaults, String) {

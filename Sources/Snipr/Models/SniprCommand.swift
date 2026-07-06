@@ -64,10 +64,13 @@ struct SniprCommand: Identifiable, Equatable, Sendable {
             systemImage: "eyedropper",
             shortcut: "⌘⇧C"
         ),
-        // Scrolling Capture command is intentionally omitted from the user-
-        // facing palette while the SCK stream stability is rewritten in
-        // Phase 4.5. The SniprCommandID case + WindowCoordinator routing
-        // remain so re-enabling is a one-line change here.
+        .init(
+            id: .scrollingCapture,
+            title: "Scrolling Capture",
+            subtitle: "Pick a window, scroll inside it, stitch the result",
+            systemImage: "rectangle.portrait.and.arrow.right",
+            shortcut: "⌘⇧V"
+        ),
         .init(
             id: .openHistory,
             title: "Open Recent History",

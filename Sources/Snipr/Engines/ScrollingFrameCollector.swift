@@ -4,8 +4,8 @@ import CoreImage
 @preconcurrency import CoreMedia
 import ScreenCaptureKit
 
-/// SCStream-driven helper that collects CGImages off a single window's
-/// content filter at ~8–10 fps. The collector is intentionally separate
+/// SCStream-driven helper that collects cropped CGImages from the target
+/// window at ~10 fps. The collector is intentionally separate
 /// from `SCKRecordingEngine` — that engine's state machine is bonded to
 /// AVAssetWriter and the scrolling capture flow only needs in-memory
 /// frames.
@@ -27,36 +27,72 @@ final class ScrollingFrameCollector {
         self.progressUpdate = progressUpdate
     }
 
+    // Retain every Nth delivered frame (~10 fps out of the 30 fps source) and
+    // cap the buffer so a runaway scroll can't exhaust memory before the user
+    // stops. 10 fps keeps enough overlap between consecutive frames for the
+    // stitch kernel even on a brisk scroll.
+    // ponytail: fixed stride + cap. Raise `maxRetainedFrames` if longer
+    // sessions are needed; switch to content-aware retention only if memory
+    // actually becomes a problem.
+    nonisolated static let retainStride = 3
+    nonisolated static let maxRetainedFrames = 600
+    /// Raw-byte bound as well as a count bound: 600 full-Retina BGRA frames
+    /// is multi-GB, so the frame count alone is not a real memory cap.
+    nonisolated static let maxRetainedBytes = 1_500_000_000
+    nonisolated static func shouldRetainFrame(at index: Int, alreadyRetained: Int, retainedBytes: Int) -> Bool {
+        index.isMultiple(of: retainStride)
+            && alreadyRetained < maxRetainedFrames
+            && retainedBytes < maxRetainedBytes
+    }
+
     func start(scWindow: SCWindow) async throws {
-        // Re-fetch the SCWindow immediately before creating the filter.
-        // `SCContentFilter(desktopIndependentWindow:)` can return -3815 if
-        // the SCWindow handle is even slightly stale (the window picker has
-        // closed, focus has shifted, etc.). Resolve against fresh content.
+        guard stream == nil else { throw ScreenRecordingError.alreadyRecording }
+        // Defensive drain: a cancelled session's late frames must never
+        // prepend to this one.
+        queue.async { [state] in _ = state.drainFrames() }
+
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         guard let freshWindow = content.windows.first(where: { $0.windowID == scWindow.windowID }) else {
             throw StitchError.noFrames
         }
+        guard let scDisplay = Self.display(for: freshWindow, in: content),
+              let screen = NSScreen.screens.first(where: { $0.sniprDisplayID == scDisplay.displayID }) else {
+            throw ScreenCaptureError.displayNotFound
+        }
+
+        // Capture the whole display and crop to the window via `sourceRect` —
+        // the exact filter shape `SCKRecordingEngine` uses. The per-window
+        // `SCContentFilter(desktopIndependentWindow:)` filter dies ~150ms after
+        // `startCapture()` with -3815; the display filter is stable. Frames
+        // therefore arrive already cropped to the window at the engine level —
+        // no per-frame CGImage crop needed.
+        let displayBounds = CGDisplayBounds(scDisplay.displayID)
+        let localPointsRect = CGRect(
+            x: freshWindow.frame.minX - displayBounds.minX,
+            y: freshWindow.frame.minY - displayBounds.minY,
+            width: freshWindow.frame.width,
+            height: freshWindow.frame.height
+        )
+        let pixelRect = DisplayGeometry.pixelRect(
+            forDisplayPointsRect: localPointsRect,
+            displayID: scDisplay.displayID,
+            screen: screen
+        )
+        let pixelWidth = max(2, Int(pixelRect.width.rounded()))
+        let pixelHeight = max(2, Int(pixelRect.height.rounded()))
 
         let configuration = SCStreamConfiguration()
-        let backingScale: CGFloat = NSScreen.screens.first(where: { screen in
-            screen.frame.intersects(freshWindow.frame)
-        })?.backingScaleFactor ?? 2.0
-        let pixelWidth = max(2, Int((freshWindow.frame.width * backingScale).rounded()))
-        let pixelHeight = max(2, Int((freshWindow.frame.height * backingScale).rounded()))
-
+        configuration.sourceRect = localPointsRect
         configuration.width = pixelWidth
         configuration.height = pixelHeight
         configuration.scalesToFit = false
         configuration.showsCursor = false
         configuration.capturesAudio = false
-        // 30 fps — SCK appears to misbehave at very low rates, dropping the
-        // capture source within ~150ms. 30 fps is closer to the working
-        // configuration the recording engine uses.
         configuration.minimumFrameInterval = CMTime(value: 1, timescale: 30)
         configuration.queueDepth = 5
         configuration.pixelFormat = kCVPixelFormatType_32BGRA
 
-        let filter = SCContentFilter(desktopIndependentWindow: freshWindow)
+        let filter = SCContentFilter(display: scDisplay, excludingWindows: [])
 
         let adapter = ScrollingStreamOutputAdapter(state: state) { [weak self] cumulativePixels in
             // Hop to MainActor for UI updates.
@@ -70,7 +106,24 @@ final class ScrollingFrameCollector {
         self.output = adapter
         self.stream = stream
 
-        try await stream.startCapture()
+        do {
+            try await stream.startCapture()
+        } catch {
+            self.stream = nil
+            self.output = nil
+            throw error
+        }
+    }
+
+    private static func display(for window: SCWindow, in content: SCShareableContent) -> SCDisplay? {
+        content.displays
+            .map { display -> (SCDisplay, CGFloat) in
+                let intersection = CGDisplayBounds(display.displayID).intersection(window.frame)
+                return (display, intersection.width * intersection.height)
+            }
+            .filter { $0.1 > 0 }
+            .max { $0.1 < $1.1 }?
+            .0
     }
 
     /// Stop collection and return the accumulated frames in temporal order.
@@ -91,13 +144,14 @@ final class ScrollingFrameCollector {
 
     func cancel() {
         let stream = self.stream
-        Task {
-            try? await stream?.stopCapture()
-        }
         self.stream = nil
         self.output = nil
-        queue.async { [state] in
-            _ = state.drainFrames()
+        // Drain only after the stream has actually stopped — draining while
+        // frames are still being delivered leaves stale frames in the shared
+        // state to pollute the next session.
+        Task { [queue, state] in
+            try? await stream?.stopCapture()
+            queue.async { _ = state.drainFrames() }
         }
     }
 }
@@ -123,22 +177,27 @@ private final class ScrollingStreamOutputAdapter: NSObject, SCStreamOutput, SCSt
             return
         }
         guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        if let cgImage = ScrollingStreamOutputAdapter.cgImage(from: imageBuffer) {
-            let cumulative = state.append(image: cgImage)
-            progressUpdate(cumulative)
-        }
+        // Frames already arrive cropped to the window via `sourceRect`. The
+        // conversion runs lazily inside `append` so the ~2/3 of frames the
+        // retain stride discards are never converted at all.
+        let cumulative = state.append { ScrollingStreamOutputAdapter.cgImage(from: imageBuffer) }
+        progressUpdate(cumulative)
     }
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        // Reserved for future Phase 4.5 scrolling-capture rewrite (full-display
-        // capture + window crop). The current path is disabled at the user-
-        // facing surface; engine retained so re-enabling is a single PR.
+        // Surface a stream death (e.g. the target window closing) instead of
+        // failing silently into an empty-frames "no frames" error later.
+        SniprDiagnostics.windowing.error(
+            "ScrollingCapture stream stopped error=\(String(describing: error), privacy: .public)"
+        )
     }
+
+    // CIContext is expensive; one per adapter, not one per frame.
+    private static let ciContext = CIContext(options: nil)
 
     private static func cgImage(from pixelBuffer: CVPixelBuffer) -> CGImage? {
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        let context = CIContext(options: nil)
-        return context.createCGImage(ciImage, from: ciImage.extent)
+        return ciContext.createCGImage(ciImage, from: ciImage.extent)
     }
 }
 
@@ -150,13 +209,25 @@ private final class ScrollingStreamOutputAdapter: NSObject, SCStreamOutput, SCSt
 private final class ScrollingFrameState: @unchecked Sendable {
     private var frames: [CGImage] = []
     private var cumulativeHeight: Int = 0
+    private var cumulativeBytes: Int = 0
+    private var seenFrames: Int = 0
 
     /// Append a frame and return the running cumulative height in pixels —
     /// used by the progress HUD to count "captured vertical pixels" without
-    /// waiting for the row-correlation kernel.
-    func append(image: CGImage) -> Int {
+    /// waiting for the row-correlation kernel. `makeImage` runs only when the
+    /// frame will actually be retained.
+    func append(makeImage: () -> CGImage?) -> Int {
+        defer { seenFrames += 1 }
+        guard ScrollingFrameCollector.shouldRetainFrame(
+            at: seenFrames,
+            alreadyRetained: frames.count,
+            retainedBytes: cumulativeBytes
+        ), let image = makeImage() else {
+            return cumulativeHeight
+        }
         frames.append(image)
         cumulativeHeight += image.height
+        cumulativeBytes += image.bytesPerRow * image.height
         return cumulativeHeight
     }
 
@@ -164,6 +235,8 @@ private final class ScrollingFrameState: @unchecked Sendable {
         defer {
             frames.removeAll()
             cumulativeHeight = 0
+            cumulativeBytes = 0
+            seenFrames = 0
         }
         return frames
     }

@@ -64,7 +64,67 @@ final class VisionStitchEngineTests: XCTestCase {
         XCTAssertThrowsError(try engine.stitch(frames: [a, b]))
     }
 
+    /// Regression for the "repeated browser chrome" bug: each frame is a
+    /// static chrome band on top of scrolling content. A naive overlap search
+    /// rejects the true overlap (the static band poisons it) and stacks the
+    /// chrome many times. The band-aware stitcher must emit the chrome once and
+    /// a continuous content strip.
+    func testStitchEmitsStaticChromeBandOnlyOnce() throws {
+        let width = 64
+        let chrome = 30          // static top band
+        let frameHeight = 120
+        let contentVisible = frameHeight - chrome
+        let scrollStep = 20      // content scrolls 20px per frame
+        let frameCount = 6
+
+        // Tall content strip the window scrolls through.
+        let totalContent = contentVisible + scrollStep * (frameCount - 1)
+        let contentStrip = makeGradient(width: width, height: totalContent)
+        let chromeBand = makeCheckerboard(width: width, height: chrome, cellSize: 5)
+
+        var frames: [CGImage] = []
+        for i in 0..<frameCount {
+            // Content window for this frame, then chrome composited on top.
+            let slice = try crop(contentStrip, rect: CGRect(x: 0, y: i * scrollStep, width: width, height: contentVisible))
+            frames.append(composeTopLeft([chromeBand, slice], width: width))
+        }
+
+        let engine = VisionStitchEngine(minOverlapFraction: 0.10, mismatchThreshold: 6.0)
+        let stitched = try XCTUnwrap(try engine.stitch(frames: frames))
+
+        // Expected: chrome once + full scrolled content = chrome + totalContent.
+        // The coarse overlap search can drift a few px per seam, so allow ~10%;
+        // the point is the chrome collapses to a single band, not the exact px.
+        let expected = chrome + totalContent
+        XCTAssertEqual(stitched.width, width)
+        XCTAssertGreaterThanOrEqual(stitched.height, Int(Double(expected) * 0.9))
+        XCTAssertLessThanOrEqual(stitched.height, expected + 8)
+        // Without the fix the chrome repeats per frame and the height balloons
+        // toward frameCount * frameHeight. Prove we're nowhere near that.
+        XCTAssertLessThan(stitched.height, frameCount * frameHeight - chrome)
+    }
+
     // MARK: - Helpers
+
+    /// Stack images top-to-bottom (first = top) into one CGImage.
+    private func composeTopLeft(_ images: [CGImage], width: Int) -> CGImage {
+        let totalHeight = images.reduce(0) { $0 + $1.height }
+        let context = CGContext(
+            data: nil,
+            width: width,
+            height: totalHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        var topOffset = 0
+        for image in images {
+            context.draw(image, in: CGRect(x: 0, y: totalHeight - topOffset - image.height, width: width, height: image.height))
+            topOffset += image.height
+        }
+        return context.makeImage()!
+    }
 
     /// Build a vertical gradient where each row has a unique gray value
     /// derived from its y-coordinate. Gives the row-correlation kernel

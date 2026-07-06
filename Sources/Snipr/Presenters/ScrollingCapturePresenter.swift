@@ -70,24 +70,23 @@ final class ScrollingCapturePresenter {
             self.hideProgressHUD()
 
             guard !frames.isEmpty else {
+                SniprDiagnostics.windowing.error("ScrollingCapture stop produced no frames")
                 self.onError?(StitchError.noFrames)
                 return
             }
 
             do {
-                guard let stitched = try self.stitchEngine.stitch(frames: frames) else {
-                    self.onError?(StitchError.allFramesRejected)
-                    return
-                }
-
                 let format = self.preferences.captureFormat
-                let pngData = self.encode(stitched, format: format)
+                let job = ScrollingStitchJob(frames: frames, stitchEngine: self.stitchEngine, format: format)
+                let result = try await Task.detached(priority: .userInitiated) {
+                    try job.run()
+                }.value
                 let suggested = CaptureFilenameTemplate.expand(
                     template: self.preferences.captureFilenameTemplate,
                     date: Date(),
                     appName: appName,
                     windowTitle: nil,
-                    pixelSize: CGSize(width: stitched.width, height: stitched.height),
+                    pixelSize: result.pixelSize,
                     sequence: 0,
                     fileExtension: format.fileExtension
                 )
@@ -97,8 +96,8 @@ final class ScrollingCapturePresenter {
                     rules: self.preferences.smartFolderRules
                 )
                 _ = try self.captureStore.addCapture(
-                    pngData: pngData,
-                    pixelSize: CGSize(width: stitched.width, height: stitched.height),
+                    pngData: result.data,
+                    pixelSize: result.pixelSize,
                     displayID: nil,
                     fileExtension: format.fileExtension,
                     suggestedFilename: suggested,
@@ -106,6 +105,7 @@ final class ScrollingCapturePresenter {
                 )
                 self.onCaptureStored?()
             } catch {
+                SniprDiagnostics.windowing.error("ScrollingCapture stitch failed error=\(String(describing: error), privacy: .public)")
                 self.onError?(error)
             }
         }
@@ -118,6 +118,10 @@ final class ScrollingCapturePresenter {
     }
 
     private func encode(_ image: CGImage, format: CaptureFormat) -> Data {
+        Self.encode(image, format: format)
+    }
+
+    nonisolated fileprivate static func encode(_ image: CGImage, format: CaptureFormat) -> Data {
         let data = NSMutableData()
         let utType: CFString
         switch format {
@@ -160,6 +164,7 @@ final class ScrollingCapturePresenter {
             defer: false
         )
         panel.level = .floating
+        panel.sharingType = .none
         panel.isFloatingPanel = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         panel.backgroundColor = .clear
@@ -179,5 +184,21 @@ final class ScrollingCapturePresenter {
     private func hideProgressHUD() {
         progressWindow?.orderOut(nil)
         progressWindow = nil
+    }
+}
+
+private struct ScrollingStitchJob: @unchecked Sendable {
+    let frames: [CGImage]
+    let stitchEngine: any StitchEngine
+    let format: CaptureFormat
+
+    func run() throws -> (data: Data, pixelSize: CGSize) {
+        guard let stitched = try stitchEngine.stitch(frames: frames) else {
+            throw StitchError.allFramesRejected
+        }
+        return (
+            ScrollingCapturePresenter.encode(stitched, format: format),
+            CGSize(width: stitched.width, height: stitched.height)
+        )
     }
 }

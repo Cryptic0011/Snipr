@@ -11,8 +11,10 @@ final class SniprPreferences {
         static let pauseStackAutoHideOnHover = "pauseStackAutoHideOnHover"
         static let hideStackAfterPreview = "hideStackAfterPreview"
         static let hotKeyBindings = "hotKeyBindings"
+        static let didEnableScrollingCapture = "didEnableScrollingCapture"
         static let copyToClipboardOnCapture = "copyToClipboardOnCapture"
         static let saveToDiskOnCapture = "saveToDiskOnCapture"
+        static let showCaptureMagnifier = "showCaptureMagnifier"
         static let captureFormat = "captureFormat"
         static let captureFilenameTemplate = "captureFilenameTemplate"
         static let colorOutputFormat = "colorOutputFormat"
@@ -55,6 +57,10 @@ final class SniprPreferences {
         didSet { defaults.set(saveToDiskOnCapture, forKey: Keys.saveToDiskOnCapture) }
     }
 
+    var showCaptureMagnifier: Bool {
+        didSet { defaults.set(showCaptureMagnifier, forKey: Keys.showCaptureMagnifier) }
+    }
+
     /// Phase 1: encoded format new captures land on disk / clipboard as.
     var captureFormat: CaptureFormat {
         didSet { saveCaptureFormat() }
@@ -95,6 +101,7 @@ final class SniprPreferences {
         hotKeyBindings = Self.loadHotKeyBindings(from: defaults)
         copyToClipboardOnCapture = defaults.object(forKey: Keys.copyToClipboardOnCapture) as? Bool ?? true
         saveToDiskOnCapture = defaults.object(forKey: Keys.saveToDiskOnCapture) as? Bool ?? true
+        showCaptureMagnifier = defaults.object(forKey: Keys.showCaptureMagnifier) as? Bool ?? false
         captureFormat = Self.loadCaptureFormat(from: defaults)
         captureFilenameTemplate = (defaults.object(forKey: Keys.captureFilenameTemplate) as? String)
             ?? CaptureFilenameTemplate.defaultTemplate
@@ -157,7 +164,20 @@ final class SniprPreferences {
             return HotKeyDefaults.bindings
         }
 
-        return HotKeyDefaults.bindings.merging(stored) { _, stored in stored }
+        var merged = HotKeyDefaults.bindings.merging(stored) { _, stored in stored }
+
+        // One-shot migration: scrolling capture shipped disabled while its SCK
+        // frame source was broken, so existing installs persisted a disabled
+        // binding that would otherwise shadow the new enabled default forever.
+        if !defaults.bool(forKey: Keys.didEnableScrollingCapture) {
+            defaults.set(true, forKey: Keys.didEnableScrollingCapture)
+            if merged[.scrollingCapture]?.isEnabled == false,
+               let defaultBinding = HotKeyDefaults.bindings[.scrollingCapture] {
+                merged[.scrollingCapture] = defaultBinding
+            }
+        }
+
+        return merged
     }
 
     private func saveSmartFolderRules() {
