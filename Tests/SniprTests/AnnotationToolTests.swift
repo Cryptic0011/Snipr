@@ -87,6 +87,14 @@ final class AnnotationToolTests: XCTestCase {
         XCTAssertFalse(tool.hitTest(layer, point: CGPoint(x: 50, y: 50)))
     }
 
+    func testTextTapDraftIsMeaningfulBeforeTextIsTyped() {
+        // The entry sheet supplies the string after the tap; a zero-distance
+        // empty-text draft must survive the gesture's isMeaningful guard or
+        // the sheet never opens.
+        let draft = makeLayer(kind: .text, start: CGPoint(x: 20, y: 20), end: CGPoint(x: 20, y: 20))
+        XCTAssertTrue(draft.isMeaningful)
+    }
+
     func testLineHitTestSnapsAlongSegment() {
         let tool = LineTool()
         let layer = makeLayer(kind: .line, start: CGPoint(x: 0, y: 0), end: CGPoint(x: 100, y: 0))

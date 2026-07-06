@@ -81,23 +81,19 @@ struct PreviewWindowView: View {
 
     private var toolbar: some View {
         HStack(spacing: 10) {
-            Text(item.filename)
-                .font(.headline)
-                .lineLimit(1)
-                .frame(maxWidth: 190, alignment: .leading)
-
-            Divider()
-                .frame(height: 22)
-
+            // No filename here — the window title bar already shows it, and a
+            // second truncated copy just crowded the tool row.
             Picker("Tool", selection: $selectedTool) {
                 ForEach(AnnotationKind.editorTools) { tool in
-                    Label(tool.title, systemImage: tool.systemImage)
+                    Image(systemName: tool.systemImage)
+                        .help(tool.title)
                         .tag(tool)
                 }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(width: 460)
+            .fixedSize()
+            .help("Annotation tool: \(selectedTool.title)")
 
             HStack(spacing: 6) {
                 ForEach(AnnotationInk.allCases) { ink in

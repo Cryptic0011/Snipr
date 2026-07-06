@@ -147,10 +147,11 @@ struct AnnotationLayer: Identifiable, Equatable {
 
     var isMeaningful: Bool {
         switch kind {
-        case .step:
-            true // a single-point tap is meaningful for step badges
-        case .text:
-            !text.isEmpty
+        case .step, .text:
+            // Single-point taps are meaningful: step badges commit directly,
+            // and text drafts are always empty at tap time — the string is
+            // typed in the entry sheet afterwards (which rejects empty text).
+            true
         default:
             hypot(end.x - start.x, end.y - start.y) > 8
         }
