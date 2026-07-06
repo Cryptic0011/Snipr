@@ -8,7 +8,7 @@ struct AnnotationSettingsTab: View {
         Form {
             Section("Annotation") {
                 LabeledContent("Available Tools") {
-                    Text(AnnotationKind.allCases.map(\.title).joined(separator: ", "))
+                    Text(AnnotationKind.editorTools.map(\.title).joined(separator: ", "))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.trailing)

@@ -1,3 +1,5 @@
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import SwiftUI
 
 struct PreviewWindowView: View {
@@ -88,12 +90,13 @@ struct PreviewWindowView: View {
                 .frame(height: 22)
 
             Picker("Tool", selection: $selectedTool) {
-                ForEach(AnnotationKind.allCases) { tool in
+                ForEach(AnnotationKind.editorTools) { tool in
                     Label(tool.title, systemImage: tool.systemImage)
                         .tag(tool)
                 }
             }
             .pickerStyle(.segmented)
+            .labelsHidden()
             .frame(width: 460)
 
             HStack(spacing: 6) {
@@ -138,6 +141,7 @@ struct PreviewWindowView: View {
             } label: {
                 Image(systemName: "doc.on.doc")
             }
+            .keyboardShortcut("c", modifiers: [.command])
             .help("Copy annotated image")
 
             Button {
@@ -266,8 +270,8 @@ private struct AnnotationCanvasView: View {
                 .scaledToFit()
                 .frame(width: containerSize.width, height: containerSize.height)
 
-            ForEach(annotations.filter { $0.kind == .blur }) { annotation in
-                BlurPreviewLayer(
+            ForEach(annotations.filter { AnnotationEffectPreview.supportsLivePreview($0.kind) }) { annotation in
+                EffectPreviewLayer(
                     image: image,
                     containerSize: containerSize,
                     imageSize: imageSize,
@@ -276,8 +280,8 @@ private struct AnnotationCanvasView: View {
                 )
             }
 
-            if let draftAnnotation, draftAnnotation.kind == .blur {
-                BlurPreviewLayer(
+            if let draftAnnotation, AnnotationEffectPreview.supportsLivePreview(draftAnnotation.kind) {
+                EffectPreviewLayer(
                     image: image,
                     containerSize: containerSize,
                     imageSize: imageSize,
@@ -330,7 +334,7 @@ private struct AnnotationCanvasView: View {
 
                 let ink: AnnotationInk
                 switch selectedTool {
-                case .blur, .pixelate, .crop:
+                case .blur, .pixelate:
                     ink = .white
                 default:
                     ink = selectedInk
@@ -448,7 +452,13 @@ private struct AnnotationCanvasView: View {
     }
 }
 
-private struct BlurPreviewLayer: View {
+enum AnnotationEffectPreview {
+    static func supportsLivePreview(_ kind: AnnotationKind) -> Bool {
+        kind == .blur || kind == .pixelate
+    }
+}
+
+private struct EffectPreviewLayer: View {
     let image: NSImage
     let containerSize: CGSize
     let imageSize: CGSize
@@ -462,11 +472,11 @@ private struct BlurPreviewLayer: View {
             displayRect: displayRect
         )
 
-        Image(nsImage: image)
+        Image(nsImage: previewImage)
             .resizable()
             .scaledToFit()
             .frame(width: containerSize.width, height: containerSize.height)
-            .blur(radius: 12)
+            .modifier(PreviewEffectModifier(kind: annotation.kind))
             .mask {
                 Rectangle()
                     .fill(.white)
@@ -475,5 +485,48 @@ private struct BlurPreviewLayer: View {
                     .frame(width: containerSize.width, height: containerSize.height, alignment: .topLeading)
             }
             .allowsHitTesting(false)
+    }
+
+    private var previewImage: NSImage {
+        switch annotation.kind {
+        case .pixelate:
+            pixelatedImage ?? image
+        default:
+            image
+        }
+    }
+
+    private var pixelatedImage: NSImage? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return nil
+        }
+
+        let ciImage = CIImage(cgImage: cgImage)
+        let filter = CIFilter.pixellate()
+        filter.inputImage = ciImage.clampedToExtent()
+        filter.scale = Float(max(8, min(annotation.bounds.width, annotation.bounds.height) / 16))
+        filter.center = CGPoint(x: CGFloat(cgImage.width) / 2, y: CGFloat(cgImage.height) / 2)
+
+        let extent = CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height)
+        guard let output = filter.outputImage?.cropped(to: extent),
+              let pixelated = CIContext(options: nil).createCGImage(output, from: extent) else {
+            return nil
+        }
+
+        return NSImage(cgImage: pixelated, size: CGSize(width: cgImage.width, height: cgImage.height))
+    }
+}
+
+private struct PreviewEffectModifier: ViewModifier {
+    let kind: AnnotationKind
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        switch kind {
+        case .blur:
+            content.blur(radius: 12)
+        default:
+            content
+        }
     }
 }

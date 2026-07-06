@@ -4,7 +4,7 @@ import XCTest
 
 @MainActor
 final class RecordingPresenterTests: XCTestCase {
-    private var tempRoot: URL!
+    private nonisolated(unsafe) var tempRoot: URL!
 
     override func setUpWithError() throws {
         tempRoot = FileManager.default.temporaryDirectory

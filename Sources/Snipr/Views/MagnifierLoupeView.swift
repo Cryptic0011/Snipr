@@ -24,6 +24,11 @@ final class MagnifierLoupeView: NSView {
     /// pixel offsets within the cached image.
     var sourceScale: CGFloat = 2.0
 
+    /// Size of the host overlay in points. When available, this is preferred
+    /// over `sourceScale` so scaled external displays and compact built-in
+    /// displays sample the captured image at the cursor's true location.
+    var sourceViewSize: CGSize?
+
     /// Cursor location in the loupe's superview coordinate space (top-left
     /// origin like the rest of the overlay).
     var cursorPoint: CGPoint = .zero {
@@ -132,7 +137,15 @@ final class MagnifierLoupeView: NSView {
         // Cursor point is in overlay coordinates (top-left origin already
         // because the overlay view is flipped). Convert to source pixel
         // coordinates with a top-left origin to match `CGImage.cropping`.
-        CGPoint(x: point.x * sourceScale, y: point.y * sourceScale)
+        if let sourceImage, let sourceViewSize {
+            return ColorPicker.imagePoint(
+                fromViewPoint: point,
+                viewSize: sourceViewSize,
+                imageSize: CGSize(width: sourceImage.width, height: sourceImage.height)
+            )
+        }
+
+        return CGPoint(x: point.x * sourceScale, y: point.y * sourceScale)
     }
 
     private func sampleRGB(at point: CGPoint) -> (UInt8, UInt8, UInt8)? {

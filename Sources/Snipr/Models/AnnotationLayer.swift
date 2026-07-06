@@ -15,6 +15,10 @@ enum AnnotationKind: String, CaseIterable, Identifiable, Codable, Sendable {
 
     var id: String { rawValue }
 
+    static var editorTools: [AnnotationKind] {
+        allCases.filter { $0 != .crop }
+    }
+
     var title: String {
         switch self {
         case .arrow:

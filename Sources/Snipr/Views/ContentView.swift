@@ -3,27 +3,26 @@ import SwiftUI
 struct ContentView: View {
     let model: SniprAppModel
     @State private var selectedTab: DashboardTab = .overview
-    @State private var permissionRefreshTick = 0
 
     var body: some View {
         ZStack {
             RaycastBackdrop()
 
             VStack(spacing: 0) {
-                HStack(spacing: 42) {
+                HStack(spacing: 28) {
                     HeroPane(
                         logoMarkImage: logoMarkImage,
                         wordmarkImage: wordmarkImage,
                         capturesCount: model.captureStore.items.count,
                         coordinator: model.coordinator
                     )
-                    .frame(width: 355, alignment: .leading)
+                    .frame(width: 310, alignment: .leading)
 
                     DashboardPane(model: model, selectedTab: selectedTab)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .padding(.horizontal, 52)
-                .padding(.top, 62)
+                .padding(.horizontal, 36)
+                .padding(.top, 44)
                 .padding(.bottom, 12)
 
                 BottomStrip(model: model, selectedTab: $selectedTab)
@@ -32,13 +31,6 @@ struct ContentView: View {
             }
         }
         .foregroundStyle(.white)
-        // Re-evaluate permission status when the user grants access in
-        // System Settings and switches back to Snipr. Cheaper and more
-        // accurate than the previous 1 Hz polling loop.
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            permissionRefreshTick += 1
-            _ = permissionRefreshTick
-        }
     }
 
     private var logoMarkImage: NSImage {
@@ -60,8 +52,7 @@ struct ContentView: View {
 
 private enum DashboardTab: String, CaseIterable, Identifiable {
     case overview
-    case captures
-    case permissions
+    case settings
 
     var id: String { rawValue }
 
@@ -69,10 +60,8 @@ private enum DashboardTab: String, CaseIterable, Identifiable {
         switch self {
         case .overview:
             "Overview"
-        case .captures:
-            "Captures"
-        case .permissions:
-            "Permissions"
+        case .settings:
+            "Settings"
         }
     }
 
@@ -80,10 +69,8 @@ private enum DashboardTab: String, CaseIterable, Identifiable {
         switch self {
         case .overview:
             "sparkles"
-        case .captures:
-            "photo.stack"
-        case .permissions:
-            "lock.shield"
+        case .settings:
+            "gear"
         }
     }
 
@@ -138,22 +125,22 @@ private struct HeroPane: View {
     let coordinator: WindowCoordinator
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack(spacing: 18) {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 14) {
                 Image(nsImage: logoMarkImage)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 104, height: 104)
+                    .frame(width: 80, height: 80)
                     .shadow(color: .white.opacity(0.16), radius: 16)
 
                 VStack(alignment: .leading, spacing: 8) {
                     Image(nsImage: wordmarkImage)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 126, height: 42, alignment: .leading)
+                        .frame(width: 100, height: 34, alignment: .leading)
 
                     Text(capturesCount == 0 ? "Local capture utility" : "\(capturesCount) captures stored")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.54))
                 }
             }
@@ -161,18 +148,18 @@ private struct HeroPane: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 Text("Ready for\nclean shots?")
-                    .font(.system(size: 44, weight: .bold, design: .rounded))
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
                     .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text("Local captures. One hotkey away.")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.62))
                     .lineSpacing(4)
                     .lineLimit(3)
             }
 
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 ActionButton(title: "Capture Area", systemImage: "selection.pin.in.out") {
                     coordinator.startCaptureArea()
                 }
@@ -194,11 +181,6 @@ private struct HeroPane: View {
                 }
             }
 
-            GlassMiniCard(
-                title: "Customize your flow",
-                subtitle: "Use Snipr from the palette, menu bar, or your preferred shortcut launcher."
-            )
-
             Spacer(minLength: 0)
         }
         .frame(maxHeight: .infinity, alignment: .topLeading)
@@ -213,84 +195,11 @@ private struct DashboardPane: View {
         VStack(spacing: 14) {
             switch selectedTab {
             case .overview:
-                PermissionsPanel(model: model, compact: true)
-                    .frame(minHeight: 286, idealHeight: 304, maxHeight: 324)
-                RecentCapturesPanel(model: model)
-            case .captures:
                 RecentCapturesPanel(model: model)
                     .frame(maxHeight: .infinity)
-            case .permissions:
-                PermissionsPanel(model: model, compact: false)
+            case .settings:
+                SettingsPanel(model: model)
                     .frame(maxHeight: .infinity)
-            }
-        }
-    }
-}
-
-private struct PermissionsPanel: View {
-    let model: SniprAppModel
-    let compact: Bool
-
-    var body: some View {
-        GlassPanel {
-            VStack(alignment: .leading, spacing: compact ? 20 : 26) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Unlock the full potential")
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
-
-                        Text("Grant only the access needed for local capture workflows.")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.54))
-                    }
-
-                    Spacer()
-
-                    Button {
-                        model.coordinator.showCommandPalette()
-                    } label: {
-                        Label("Palette", systemImage: "command")
-                    }
-                    .buttonStyle(CompactDarkButtonStyle())
-                }
-
-                VStack(spacing: 0) {
-                    PermissionRow(
-                        systemImage: "rectangle.dashed",
-                        title: "Screen Recording",
-                        subtitle: "Required to capture selected screen regions.",
-                        isGranted: PermissionService.hasScreenRecordingAccess,
-                        actionTitle: PermissionService.hasScreenRecordingAccess ? "Access Granted" : "Open Settings"
-                    ) {
-                        PermissionService.openScreenRecordingSettings()
-                    }
-
-                    DividerLine()
-
-                    PermissionRow(
-                        systemImage: "figure.wave",
-                        title: "Accessibility",
-                        subtitle: "Optional for advanced automation and future window-aware capture.",
-                        isGranted: PermissionService.hasAccessibilityAccess,
-                        actionTitle: PermissionService.hasAccessibilityAccess ? "Access Granted" : "Request Access"
-                    ) {
-                        if !PermissionService.requestAccessibilityAccess() {
-                            PermissionService.openAccessibilitySettings()
-                        }
-                    }
-
-                    DividerLine()
-
-                    PermissionRow(
-                        systemImage: "folder",
-                        title: "Local Capture Folder",
-                        subtitle: "PNG history stays on this Mac.",
-                        isGranted: true,
-                        actionTitle: "Reveal"
-                    ) {
-                        NSWorkspace.shared.activateFileViewerSelecting([model.captureStore.rootDirectory])
-                    }
-                }
             }
         }
     }
@@ -330,46 +239,6 @@ private struct RecentCapturesPanel: View {
                 }
             }
         }
-    }
-}
-
-private struct PermissionRow: View {
-    let systemImage: String
-    let title: String
-    let subtitle: String
-    let isGranted: Bool
-    let actionTitle: String
-    let action: () -> Void
-
-    var body: some View {
-        HStack(spacing: 18) {
-            Image(systemName: systemImage)
-                .font(.system(size: 20, weight: .medium))
-                .foregroundStyle(.white.opacity(0.82))
-                .frame(width: 28)
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text(title)
-                    .font(.system(size: 15, weight: .bold))
-
-                Text(subtitle)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.48))
-                    .lineLimit(2)
-            }
-
-            Spacer()
-
-            Button(action: action) {
-                HStack(spacing: 8) {
-                    Image(systemName: isGranted ? "checkmark" : "arrow.up.right")
-                    Text(actionTitle)
-                }
-                .frame(minWidth: 126)
-            }
-            .buttonStyle(OutlineStatusButtonStyle(isGranted: isGranted))
-        }
-        .padding(.vertical, 13)
     }
 }
 
@@ -428,6 +297,52 @@ private struct EmptyHistoryView: View {
         }
         .frame(maxWidth: .infinity, minHeight: 120)
         .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct SettingsPanel: View {
+    let model: SniprAppModel
+
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+    }
+
+    private var buildNumber: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+    }
+
+    var body: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 24) {
+                Text("Settings")
+                    .font(.system(size: 17, weight: .bold))
+
+                VStack(alignment: .leading, spacing: 16) {
+                    SettingsLink {
+                        Label("Open Settings", systemImage: "gearshape")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(PrimaryRaycastButtonStyle())
+
+                    Text("Configure capture, recording, hotkeys, and more.")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.46))
+                }
+
+                Divider()
+                    .overlay(.white.opacity(0.08))
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Snipr")
+                        .font(.system(size: 13, weight: .bold))
+                    Text("Version \(appVersion) (\(buildNumber))")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.46))
+                }
+
+                Spacer()
+            }
+        }
     }
 }
 
@@ -508,14 +423,6 @@ private struct GlassPanel<Content: View>: View {
     }
 }
 
-private struct DividerLine: View {
-    var body: some View {
-        Rectangle()
-            .fill(.white.opacity(0.08))
-            .frame(height: 1)
-    }
-}
-
 private struct ActionButton: View {
     let title: String
     let systemImage: String
@@ -527,33 +434,12 @@ private struct ActionButton: View {
                 Label(title, systemImage: systemImage)
                 Spacer()
             }
-            .font(.system(size: 14, weight: .bold))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .font(.system(size: 13, weight: .bold))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
             .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
-    }
-}
-
-private struct GlassMiniCard: View {
-    let title: String
-    let subtitle: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(title)
-                .font(.system(size: 15, weight: .bold))
-
-            Text(subtitle)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.52))
-                .lineLimit(3)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.08)))
     }
 }
 
@@ -607,26 +493,6 @@ private struct TabPillButtonStyle: ButtonStyle {
                     .overlay(
                         RoundedRectangle(cornerRadius: 7)
                             .stroke(isSelected ? Color(red: 1.0, green: 0.38, blue: 0.44).opacity(0.36) : .white.opacity(0.06))
-                    )
-            )
-    }
-}
-
-private struct OutlineStatusButtonStyle: ButtonStyle {
-    let isGranted: Bool
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(.white.opacity(configuration.isPressed ? 0.62 : 0.94))
-            .padding(.horizontal, 13)
-            .padding(.vertical, 9)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isGranted ? .white.opacity(0.025) : Color(red: 0.45, green: 0.14, blue: 0.16).opacity(0.28))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(isGranted ? .white.opacity(0.11) : Color(red: 1.0, green: 0.36, blue: 0.4).opacity(0.3))
                     )
             )
     }

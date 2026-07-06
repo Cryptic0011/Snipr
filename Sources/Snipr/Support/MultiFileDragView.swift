@@ -2,6 +2,21 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+enum FileDragPasteboardItem {
+    static func make(url: URL) -> NSPasteboardItem {
+        let item = NSPasteboardItem()
+        item.setString(url.absoluteString, forType: .fileURL)
+        item.setString(url.absoluteString, forType: .sniprPublicURL)
+        item.setString(url.absoluteString, forType: .URL)
+        item.setString(url.path, forType: .string)
+        return item
+    }
+}
+
+extension NSPasteboard.PasteboardType {
+    static let sniprPublicURL = NSPasteboard.PasteboardType(UTType.url.identifier)
+}
+
 /// SwiftUI bridge that emits a real *multi-file* AppKit drag session on
 /// mouse-drag, so dropping into Finder / Slack / Discord lands every URL
 /// instead of just the first.
@@ -52,9 +67,7 @@ struct MultiFileDragView: NSViewRepresentable {
             var items: [NSDraggingItem] = []
             items.reserveCapacity(urls.count)
             for (offset, url) in urls.enumerated() {
-                let pasteItem = NSPasteboardItem()
-                pasteItem.setString(url.absoluteString, forType: .fileURL)
-                let dragItem = NSDraggingItem(pasteboardWriter: pasteItem)
+                let dragItem = NSDraggingItem(pasteboardWriter: FileDragPasteboardItem.make(url: url))
                 let icon = NSWorkspace.shared.icon(forFile: url.path)
                 let size = NSSize(width: 96, height: 64)
                 let frame = NSRect(

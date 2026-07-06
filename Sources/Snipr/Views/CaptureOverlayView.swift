@@ -2,9 +2,82 @@ import AppKit
 import CoreGraphics
 import SwiftUI
 
+@MainActor
+final class CaptureOverlaySelectionCoordinator {
+    var onChange: (() -> Void)?
+
+    private var startScreenPoint: CGPoint?
+    private var currentScreenPoint: CGPoint?
+
+    var isSelecting: Bool {
+        startScreenPoint != nil && currentScreenPoint != nil
+    }
+
+    func begin(at point: CGPoint) {
+        startScreenPoint = point
+        currentScreenPoint = point
+        onChange?()
+    }
+
+    func update(to point: CGPoint) {
+        guard startScreenPoint != nil else { return }
+        currentScreenPoint = point
+        onChange?()
+    }
+
+    func reset() {
+        startScreenPoint = nil
+        currentScreenPoint = nil
+        onChange?()
+    }
+
+    func selectionRect(inScreenFrame screenFrame: CGRect) -> CGRect? {
+        guard let globalRect else { return nil }
+        return Self.selectionRect(forGlobalRect: globalRect, inScreenFrame: screenFrame)
+    }
+
+    static func selectionRect(forGlobalRect globalRect: CGRect, inScreenFrame screenFrame: CGRect) -> CGRect? {
+        let clipped = globalRect.intersection(screenFrame)
+        guard !clipped.isNull, clipped.width > 0, clipped.height > 0 else {
+            return nil
+        }
+
+        return CGRect(
+            x: clipped.minX - screenFrame.minX,
+            y: screenFrame.maxY - clipped.maxY,
+            width: clipped.width,
+            height: clipped.height
+        )
+    }
+
+    var globalRect: CGRect? {
+        guard let startScreenPoint, let currentScreenPoint else {
+            return nil
+        }
+
+        return CGRect(
+            x: min(startScreenPoint.x, currentScreenPoint.x),
+            y: min(startScreenPoint.y, currentScreenPoint.y),
+            width: abs(currentScreenPoint.x - startScreenPoint.x),
+            height: abs(currentScreenPoint.y - startScreenPoint.y)
+        )
+    }
+}
+
 final class CaptureSelectionNSView: NSView {
     var onComplete: ((CGRect) -> Void)?
+    var onCompleteInScreenCoordinates: ((CGRect, CGPoint) -> Void)?
     var onCancel: (() -> Void)?
+    var onPointerPreviewActivated: ((CaptureSelectionNSView) -> Void)?
+    var selectionCoordinator: CaptureOverlaySelectionCoordinator?
+    var showsMagnifier = false {
+        didSet {
+            if !showsMagnifier {
+                loupe?.isHidden = true
+                hexLabel?.isHidden = true
+            }
+        }
+    }
 
     /// Backing scale of the screen this view sits on; used by the loupe to
     /// translate cursor points → source-image pixels.
@@ -45,6 +118,10 @@ final class CaptureSelectionNSView: NSView {
         true
     }
 
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
     override func viewDidMoveToWindow() {
         window?.makeFirstResponder(self)
     }
@@ -74,11 +151,7 @@ final class CaptureSelectionNSView: NSView {
 
         NSColor.clear.setFill()
         selectionRect.fill(using: .clear)
-
-        NSColor.systemCyan.setStroke()
-        let path = NSBezierPath(rect: selectionRect)
-        path.lineWidth = 2
-        path.stroke()
+        drawSelectionFrame(selectionRect)
 
         drawDimensions(for: selectionRect)
     }
@@ -87,22 +160,38 @@ final class CaptureSelectionNSView: NSView {
         let point = convert(event.locationInWindow, from: nil)
         startPoint = point
         currentPoint = point
+        selectionCoordinator?.begin(at: screenPoint(forLocalPoint: point))
         updateCoordReadout(at: point)
+        activatePointerPreview()
         moveLoupe(to: point)
         needsDisplay = true
     }
 
     override func mouseDragged(with event: NSEvent) {
         let raw = convert(event.locationInWindow, from: nil)
-        currentPoint = applySnapping(rawPoint: raw, modifiers: event.modifierFlags)
+        let snapped = applySnapping(rawPoint: raw, modifiers: event.modifierFlags)
+        currentPoint = snapped
+        selectionCoordinator?.update(to: screenPoint(forLocalPoint: snapped))
         updateCoordReadout(at: raw)
+        activatePointerPreview()
         moveLoupe(to: raw)
         needsDisplay = true
     }
 
     override func mouseUp(with event: NSEvent) {
         let raw = convert(event.locationInWindow, from: nil)
-        currentPoint = applySnapping(rawPoint: raw, modifiers: event.modifierFlags)
+        let snapped = applySnapping(rawPoint: raw, modifiers: event.modifierFlags)
+        currentPoint = snapped
+        selectionCoordinator?.update(to: screenPoint(forLocalPoint: snapped))
+
+        if let globalRect = selectionCoordinator?.globalRect {
+            guard globalRect.width >= 4, globalRect.height >= 4 else {
+                onCancel?()
+                return
+            }
+            onCompleteInScreenCoordinates?(globalRect, screenPoint(forLocalPoint: snapped))
+            return
+        }
 
         guard let selectionRect, selectionRect.width >= 4, selectionRect.height >= 4 else {
             onCancel?()
@@ -114,8 +203,13 @@ final class CaptureSelectionNSView: NSView {
 
     override func mouseMoved(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+        activatePointerPreview()
         moveLoupe(to: point)
         updateCoordReadout(at: point)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        hidePointerPreview()
     }
 
     override func rightMouseDown(with event: NSEvent) {
@@ -176,6 +270,10 @@ final class CaptureSelectionNSView: NSView {
     }
 
     private var selectionRect: CGRect? {
+        if let selectionCoordinator, let window {
+            return selectionCoordinator.selectionRect(inScreenFrame: window.frame)
+        }
+
         guard let startPoint, let currentPoint else {
             return nil
         }
@@ -198,6 +296,25 @@ final class CaptureSelectionNSView: NSView {
         let size = text.size(withAttributes: attributes)
         let point = CGPoint(x: rect.minX, y: max(8, rect.minY - size.height - 8))
         text.draw(at: point, withAttributes: attributes)
+    }
+
+    private func drawSelectionFrame(_ rect: CGRect) {
+        let path = NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3)
+
+        NSGraphicsContext.saveGraphicsState()
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.45)
+        shadow.shadowBlurRadius = 8
+        shadow.shadowOffset = .zero
+        shadow.set()
+        NSColor.white.withAlphaComponent(0.92).setStroke()
+        path.lineWidth = 1.5
+        path.stroke()
+        NSGraphicsContext.restoreGraphicsState()
+
+        NSColor.black.withAlphaComponent(0.42).setStroke()
+        path.lineWidth = 0.5
+        path.stroke()
     }
 
     private func installLoupe() {
@@ -236,7 +353,24 @@ final class CaptureSelectionNSView: NSView {
         coordLabel = label
     }
 
+    func hidePointerPreview() {
+        loupe.isHidden = true
+        hexLabel.isHidden = true
+        coordLabel.isHidden = true
+    }
+
+    private func activatePointerPreview() {
+        onPointerPreviewActivated?(self)
+    }
+
     private func moveLoupe(to point: CGPoint) {
+        guard showsMagnifier else {
+            loupe.isHidden = true
+            hexLabel.isHidden = true
+            return
+        }
+
+        loupe.sourceViewSize = bounds.size
         loupe.cursorPoint = point
         hexLabel.stringValue = loupe.hexReadout
         let offset: CGFloat = 12
@@ -272,7 +406,7 @@ final class CaptureSelectionNSView: NSView {
         // Standalone crosshair coords readout (separate from the in-rect
         // dimensions text) so the user always sees the cursor coordinate
         // even before the first click.
-        guard startPoint == nil else {
+        guard startPoint == nil, selectionCoordinator?.isSelecting != true else {
             coordLabel.isHidden = true
             return
         }
@@ -314,6 +448,14 @@ final class CaptureSelectionNSView: NSView {
         panel.makeKeyAndOrderFront(nil)
         entryPanel = panel
     }
+
+    private func screenPoint(forLocalPoint point: CGPoint) -> CGPoint {
+        guard let window else { return point }
+        return CGPoint(
+            x: window.frame.minX + point.x,
+            y: window.frame.maxY - point.y
+        )
+    }
 }
 
 /// SwiftUI shim retained for any callers that still use `CaptureOverlayView`
@@ -337,4 +479,3 @@ struct CaptureOverlayView: NSViewRepresentable {
         nsView.onCancel = onCancel
     }
 }
-

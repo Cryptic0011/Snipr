@@ -1,31 +1,38 @@
 @preconcurrency import AVFoundation
-import AVKit
+@preconcurrency import AVKit
 import SwiftUI
 
 /// Preview pane for recorded video items, with simple in/out trim handles
 /// and an Export button that runs the trimmed range through `TrimExporter`.
+/// Uses AVPlayerView via NSViewRepresentable to avoid AVKit.VideoPlayer
+/// metadata-initialization crashes under .accessory activation policy.
 struct VideoTrimView: View {
     let item: CaptureItem
 
-    @State private var player: AVPlayer
+    @State private var player: AVPlayer?
     @State private var duration: TimeInterval = 0
     @State private var trimStart: TimeInterval = 0
     @State private var trimEnd: TimeInterval = 0
     @State private var isExporting = false
     @State private var exportError: String?
 
-    init(item: CaptureItem) {
-        self.item = item
-        _player = State(initialValue: AVPlayer(url: item.fileURL))
-    }
-
     var body: some View {
         VStack(spacing: 0) {
-            VideoPlayer(player: player)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.black)
+            if let player {
+                AVPlayerViewWrapper(player: player)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.black)
+            } else {
+                Rectangle()
+                    .fill(Color.black)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlay(ProgressView())
+            }
 
             controls
+        }
+        .onAppear {
+            player = AVPlayer(url: item.fileURL)
         }
         .task {
             await loadDuration()
@@ -111,12 +118,11 @@ struct VideoTrimView: View {
                 trimEnd = duration
             }
         } catch {
-            // Leave duration at 0 — UI shows "Loading video…" forever; better
-            // than crashing.
         }
     }
 
     private func seek(to seconds: TimeInterval) {
+        guard let player else { return }
         player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
     }
 
@@ -148,5 +154,21 @@ struct VideoTrimView: View {
         } catch {
             exportError = error.localizedDescription
         }
+    }
+}
+
+private struct AVPlayerViewWrapper: NSViewRepresentable {
+    typealias NSViewType = AVPlayerView
+
+    let player: AVPlayer
+
+    func makeNSView(context: Context) -> AVPlayerView {
+        let view = AVPlayerView()
+        view.controlsStyle = .inline
+        return view
+    }
+
+    func updateNSView(_ nsView: AVPlayerView, context: Context) {
+        nsView.player = player
     }
 }

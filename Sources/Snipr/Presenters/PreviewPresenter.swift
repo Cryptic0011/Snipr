@@ -8,6 +8,8 @@ import SwiftUI
 @Observable
 final class PreviewPresenter {
     private var previewWindows: [UUID: NSWindow] = [:]
+    private var previewWindowIDs: Set<ObjectIdentifier> = []
+    private var closeObserverTokens: [UUID: NSObjectProtocol] = [:]
     private let captureStore: CaptureStore
 
     var contentProvider: ((CaptureItem) -> AnyView)?
@@ -42,25 +44,30 @@ final class PreviewPresenter {
             backing: .buffered,
             defer: false
         )
+        SniprDiagnostics.disableRestoration(for: window)
         window.title = item.filename
+        window.animationBehavior = .none
+        window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: rootView)
         window.center()
-        previewWindows[item.id] = window
+        registerPreviewWindow(window, for: item.id)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         onPreviewOpened?()
     }
 
     func closePreview(for itemID: UUID) {
-        previewWindows[itemID]?.close()
-        previewWindows[itemID] = nil
+        guard let window = previewWindows[itemID] else { return }
+        unregisterPreviewWindow(for: itemID)
+        window.contentView = nil
+        window.close()
     }
 
     /// True when `window` is one of the open preview/annotation windows.
     /// Consulted by the stack presenter so auto-hide pauses while the user
     /// is editing.
     func isPreviewWindow(_ window: NSWindow) -> Bool {
-        previewWindows.values.contains(window)
+        previewWindowIDs.contains(ObjectIdentifier(window))
     }
 
     func delete(_ item: CaptureItem) {
@@ -69,6 +76,30 @@ final class PreviewPresenter {
             closePreview(for: item.id)
         } catch {
             onError?(error)
+        }
+    }
+
+    private func registerPreviewWindow(_ window: NSWindow, for itemID: UUID) {
+        previewWindows[itemID] = window
+        previewWindowIDs.insert(ObjectIdentifier(window))
+        closeObserverTokens[itemID] = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: window,
+            queue: .main
+        ) { [weak self, weak window] _ in
+            MainActor.assumeIsolated {
+                window?.contentView = nil
+                self?.unregisterPreviewWindow(for: itemID)
+            }
+        }
+    }
+
+    private func unregisterPreviewWindow(for itemID: UUID) {
+        if let token = closeObserverTokens.removeValue(forKey: itemID) {
+            NotificationCenter.default.removeObserver(token)
+        }
+        if let window = previewWindows.removeValue(forKey: itemID) {
+            previewWindowIDs.remove(ObjectIdentifier(window))
         }
     }
 }

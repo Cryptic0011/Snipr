@@ -1,10 +1,11 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import Snipr
 
 @MainActor
 final class PreviewPresenterTests: XCTestCase {
-    private var tempRoot: URL!
+    private nonisolated(unsafe) var tempRoot: URL!
 
     override func setUpWithError() throws {
         tempRoot = FileManager.default.temporaryDirectory
@@ -45,6 +46,83 @@ final class PreviewPresenterTests: XCTestCase {
         presenter.closePreview(for: UUID())
         // No assertion; the test verifies the call doesn't crash on an
         // unknown identifier.
+    }
+
+    func testPreviewWindowWillCloseNotificationUnregistersIt() throws {
+        let store = CaptureStore(rootDirectory: tempRoot)
+        let presenter = PreviewPresenter(captureStore: store)
+        let item = try store.addCapture(
+            pngData: samplePNGData(),
+            pixelSize: CGSize(width: 1, height: 1),
+            displayID: nil
+        )
+        presenter.contentProvider = { _ in AnyView(EmptyView()) }
+
+        presenter.openPreview(for: item)
+        let window = try XCTUnwrap(NSApp.windows.first { $0.title == item.filename })
+        XCTAssertTrue(presenter.isPreviewWindow(window))
+
+        NotificationCenter.default.post(name: NSWindow.willCloseNotification, object: window)
+        window.orderOut(nil)
+
+        XCTAssertFalse(presenter.isPreviewWindow(window))
+    }
+
+    func testNativePreviewWindowCloseDetachesHostingViewBeforeRelease() throws {
+        let store = CaptureStore(rootDirectory: tempRoot)
+        let presenter = PreviewPresenter(captureStore: store)
+        let item = try store.addCapture(
+            pngData: samplePNGData(),
+            pixelSize: CGSize(width: 1, height: 1),
+            displayID: nil
+        )
+        presenter.contentProvider = { _ in AnyView(EmptyView()) }
+
+        presenter.openPreview(for: item)
+        let window = try XCTUnwrap(NSApp.windows.first { $0.title == item.filename })
+
+        window.performClose(nil)
+
+        XCTAssertNil(window.contentView)
+        XCTAssertFalse(presenter.isPreviewWindow(window))
+    }
+
+    func testPreviewWindowIsNotAutoReleasedByAppKitOnClose() throws {
+        let store = CaptureStore(rootDirectory: tempRoot)
+        let presenter = PreviewPresenter(captureStore: store)
+        let item = try store.addCapture(
+            pngData: samplePNGData(),
+            pixelSize: CGSize(width: 1, height: 1),
+            displayID: nil
+        )
+        presenter.contentProvider = { _ in AnyView(EmptyView()) }
+
+        presenter.openPreview(for: item)
+        let window = try XCTUnwrap(NSApp.windows.first { $0.title == item.filename })
+
+        XCTAssertFalse(window.isReleasedWhenClosed)
+
+        NotificationCenter.default.post(name: NSWindow.willCloseNotification, object: window)
+        window.orderOut(nil)
+    }
+
+    func testPreviewWindowDisablesAppKitTransformAnimations() throws {
+        let store = CaptureStore(rootDirectory: tempRoot)
+        let presenter = PreviewPresenter(captureStore: store)
+        let item = try store.addCapture(
+            pngData: samplePNGData(),
+            pixelSize: CGSize(width: 1, height: 1),
+            displayID: nil
+        )
+        presenter.contentProvider = { _ in AnyView(EmptyView()) }
+
+        presenter.openPreview(for: item)
+        let window = try XCTUnwrap(NSApp.windows.first { $0.title == item.filename })
+
+        XCTAssertEqual(window.animationBehavior, .none)
+
+        NotificationCenter.default.post(name: NSWindow.willCloseNotification, object: window)
+        window.orderOut(nil)
     }
 
     /// `onError` fires when the underlying delete throws. Drive the failure

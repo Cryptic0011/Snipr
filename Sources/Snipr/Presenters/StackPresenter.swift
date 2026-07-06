@@ -65,8 +65,7 @@ final class StackPresenter {
     func hide() {
         thumbnailHideTask?.cancel()
         thumbnailHideTask = nil
-        thumbnailPanel?.orderOut(nil)
-        thumbnailPanel = nil
+        closeThumbnailPanel()
         isHovered = false
         isPinned = false
         isExpanded = false
@@ -124,7 +123,7 @@ final class StackPresenter {
             x: screen.visibleFrame.maxX - target.width - 24,
             y: screen.visibleFrame.minY + 24
         )
-        panel.setFrame(NSRect(origin: origin, size: target), display: true, animate: true)
+        panel.setFrame(NSRect(origin: origin, size: target), display: true, animate: false)
         if expanded {
             panel.makeKey()
         }
@@ -136,8 +135,7 @@ final class StackPresenter {
         guard !captureStore.items.isEmpty,
               let screen = NSScreen.main,
               let contentProvider else {
-            thumbnailPanel?.orderOut(nil)
-            thumbnailPanel = nil
+            closeThumbnailPanel()
             return
         }
 
@@ -159,15 +157,25 @@ final class StackPresenter {
             backing: .buffered,
             defer: false
         )
+        SniprDiagnostics.disableRestoration(for: panel)
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
+        panel.animationBehavior = .none
         panel.contentView = NSHostingView(rootView: contentProvider())
         thumbnailPanel = panel
         panel.orderFrontRegardless()
         scheduleAutoHide()
+    }
+
+    private func closeThumbnailPanel() {
+        guard let panel = thumbnailPanel else { return }
+        panel.contentView = nil
+        panel.orderOut(nil)
+        panel.close()
+        thumbnailPanel = nil
     }
 
     private func installPreviewKeyObservers() {

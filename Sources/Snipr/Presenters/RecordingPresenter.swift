@@ -31,11 +31,6 @@ final class RecordingPresenter {
         recordingEngine.isRecording
     }
 
-    /// Phase 3: user-controlled recording toggles, exposed in the HUD before
-    /// the recording starts. Persisted across the session so flipping them
-    /// once sticks for subsequent recordings.
-    var capturesSystemAudio: Bool = false
-
     func start(displayID: CGDirectDisplayID, screen: NSScreen, rect: CGRect) {
         guard !recordingEngine.isRecording else {
             return
@@ -50,7 +45,7 @@ final class RecordingPresenter {
 
             do {
                 let destinationURL = try captureStore.nextRecordingURL()
-                let resolvedSystemAudio = preferences?.recordSystemAudio ?? capturesSystemAudio
+                let resolvedSystemAudio = preferences?.recordSystemAudio ?? false
                 try await recordingEngine.start(
                     displayID: displayID,
                     rectInDisplayPoints: rect,

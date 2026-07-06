@@ -22,6 +22,10 @@ final class WindowPickerNSView: NSView {
     private var hovered: WindowEntry?
     private var trackingArea: NSTrackingArea?
 
+    var highlightedWindowID: CGWindowID? {
+        hovered?.scWindowID
+    }
+
     override var acceptsFirstResponder: Bool { true }
     override var isFlipped: Bool { true }
 
@@ -44,21 +48,24 @@ final class WindowPickerNSView: NSView {
         trackingArea = area
     }
 
-    func setWindows(_ entries: [WindowEntry]) {
+    func setWindows(_ entries: [WindowEntry], excludingWindowIDs excludedIDs: Set<CGWindowID> = []) {
         // Sort topmost-first so the picker honors window stacking.
-        windows = entries
+        windows = entries.filter { !excludedIDs.contains($0.scWindowID) && $0.appName != "Dock" }
         needsDisplay = true
     }
 
     override func mouseMoved(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        hovered = windowAt(point: point)
-        needsDisplay = true
+        updateHover(at: point)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        clearHover()
     }
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        guard let entry = windowAt(point: point) else {
+        guard let entry = windowEntry(at: point) else {
             onCancel?()
             return
         }
@@ -78,48 +85,58 @@ final class WindowPickerNSView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.black.withAlphaComponent(0.32).setFill()
+        NSColor.black.withAlphaComponent(0.30).setFill()
         bounds.fill()
 
         guard let hovered else { return }
 
-        // Punch a clear hole through the dim layer so the hovered window
-        // shows through full-brightness, then tint with system blue. This
-        // mirrors macOS Screenshot.app's window-pick highlight.
         NSColor.clear.setFill()
         hovered.frame.fill(using: .copy)
 
-        let path = NSBezierPath(rect: hovered.frame)
-        NSColor.systemBlue.withAlphaComponent(0.28).setFill()
-        path.fill()
-
-        NSColor.white.withAlphaComponent(0.92).setStroke()
-        path.lineWidth = 3
-        path.stroke()
-
+        drawWindowFrame(hovered.frame)
         drawLabel(for: hovered)
     }
 
+    private func drawWindowFrame(_ rect: CGRect) {
+        let path = NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5)
+
+        NSGraphicsContext.saveGraphicsState()
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.55)
+        shadow.shadowBlurRadius = 10
+        shadow.shadowOffset = .zero
+        shadow.set()
+        NSColor.white.withAlphaComponent(0.92).setStroke()
+        path.lineWidth = 1.5
+        path.stroke()
+        NSGraphicsContext.restoreGraphicsState()
+
+        NSColor.black.withAlphaComponent(0.46).setStroke()
+        path.lineWidth = 0.5
+        path.stroke()
+    }
+
     private func drawLabel(for entry: WindowEntry) {
-        let primary = entry.appName ?? "Window"
-        let secondary = entry.title ?? ""
-        let text = "📷  " + (secondary.isEmpty ? primary : "\(primary) — \(secondary)")
+        let text = Self.labelText(for: entry)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byTruncatingTail
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
-            .foregroundColor: NSColor.white
+            .foregroundColor: NSColor.white,
+            .paragraphStyle: paragraph
         ]
         let attributed = NSAttributedString(string: text, attributes: attributes)
         let textSize = attributed.size()
 
-        let pillPadding = NSEdgeInsets(top: 5, left: 10, bottom: 5, right: 10)
+        let pillPadding = NSEdgeInsets(top: 6, left: 10, bottom: 6, right: 10)
+        let maxPillWidth = max(44, min(bounds.width - 16, 420))
         let pillSize = NSSize(
-            width: textSize.width + pillPadding.left + pillPadding.right,
+            width: min(textSize.width + pillPadding.left + pillPadding.right, maxPillWidth),
             height: textSize.height + pillPadding.top + pillPadding.bottom
         )
-        // Default to placing the label above the window; if the window is
-        // near the top edge, slot it inside the top of the window instead.
+
         var origin = CGPoint(
-            x: max(8, entry.frame.minX),
+            x: min(max(8, entry.frame.minX), max(8, bounds.maxX - pillSize.width - 8)),
             y: entry.frame.minY - pillSize.height - 8
         )
         if origin.y < 8 {
@@ -128,17 +145,40 @@ final class WindowPickerNSView: NSView {
 
         let pillRect = CGRect(origin: origin, size: pillSize)
         let pillPath = NSBezierPath(roundedRect: pillRect, xRadius: 6, yRadius: 6)
-        NSColor.black.withAlphaComponent(0.82).setFill()
+        NSColor.black.withAlphaComponent(0.78).setFill()
         pillPath.fill()
+        NSColor.white.withAlphaComponent(0.16).setStroke()
+        pillPath.lineWidth = 0.5
+        pillPath.stroke()
 
-        attributed.draw(at: CGPoint(
+        attributed.draw(in: CGRect(
             x: origin.x + pillPadding.left,
-            y: origin.y + pillPadding.top
+            y: origin.y + pillPadding.top,
+            width: pillSize.width - pillPadding.left - pillPadding.right,
+            height: textSize.height
         ))
     }
 
-    private func windowAt(point: CGPoint) -> WindowEntry? {
+    static func labelText(for entry: WindowEntry) -> String {
+        let primary = entry.appName ?? "Window"
+        guard let title = entry.title, !title.isEmpty else {
+            return primary
+        }
+        return "\(primary) - \(title)"
+    }
+
+    func windowEntry(at point: CGPoint) -> WindowEntry? {
         // Topmost-first list is supplied; first hit wins.
         windows.first { $0.frame.contains(point) }
+    }
+
+    func updateHover(at point: CGPoint) {
+        hovered = windowEntry(at: point)
+        needsDisplay = true
+    }
+
+    func clearHover() {
+        hovered = nil
+        needsDisplay = true
     }
 }

@@ -14,6 +14,7 @@ final class ColorPickerOverlayView: NSView {
 
     var onSample: ((SampleResult) -> Void)?
     var onCancel: (() -> Void)?
+    var onPointerPreviewActivated: ((ColorPickerOverlayView) -> Void)?
     var sourceScale: CGFloat = 2.0 {
         didSet { loupe.sourceScale = sourceScale }
     }
@@ -43,6 +44,7 @@ final class ColorPickerOverlayView: NSView {
 
     func setSourceImage(_ image: CGImage) {
         loupe.sourceImage = image
+        loupe.sourceViewSize = bounds.size
     }
 
     override func updateTrackingAreas() {
@@ -62,16 +64,26 @@ final class ColorPickerOverlayView: NSView {
 
     override func mouseMoved(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+        onPointerPreviewActivated?(self)
+        loupe.sourceViewSize = bounds.size
         loupe.cursorPoint = point
         positionLoupe(near: point)
         hexLabel.stringValue = loupe.hexReadout
+        loupe.isHidden = false
+        hexLabel.isHidden = false
     }
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        let pixel = CGPoint(x: point.x * sourceScale, y: point.y * sourceScale)
         guard let image = loupe.sourceImage,
-              let sample = ColorPicker.sample(image: image, at: pixel) else {
+              let sample = ColorPicker.sample(
+                image: image,
+                at: ColorPicker.imagePoint(
+                    fromViewPoint: point,
+                    viewSize: bounds.size,
+                    imageSize: CGSize(width: image.width, height: image.height)
+                )
+              ) else {
             onCancel?()
             return
         }
@@ -96,9 +108,19 @@ final class ColorPickerOverlayView: NSView {
         onCancel?()
     }
 
+    override func mouseExited(with event: NSEvent) {
+        hidePointerPreview()
+    }
+
+    func hidePointerPreview() {
+        loupe.isHidden = true
+        hexLabel.isHidden = true
+    }
+
     private func installLoupe() {
         let size = NSSize(width: MagnifierLoupeView.dimension, height: MagnifierLoupeView.dimension)
         loupe = MagnifierLoupeView(frame: NSRect(origin: .zero, size: size))
+        loupe.isHidden = true
         addSubview(loupe)
 
         hexLabel = NSTextField(labelWithString: "—")
@@ -109,6 +131,7 @@ final class ColorPickerOverlayView: NSView {
         hexLabel.isBezeled = false
         hexLabel.isEditable = false
         hexLabel.alignment = .center
+        hexLabel.isHidden = true
         addSubview(hexLabel)
     }
 

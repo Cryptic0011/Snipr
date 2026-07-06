@@ -30,6 +30,7 @@ final class CommandPalettePresenter {
             backing: .buffered,
             defer: false
         )
+        SniprDiagnostics.disableRestoration(for: panel)
         panel.isFloatingPanel = true
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
@@ -68,7 +69,10 @@ final class CommandPalettePresenter {
     }
 
     func hide() {
-        panel?.orderOut(nil)
-        panel = nil
+        guard let panel else { return }
+        panel.contentView = nil
+        panel.orderOut(nil)
+        panel.close()
+        self.panel = nil
     }
 }

@@ -8,12 +8,13 @@ struct SniprApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(model: model)
-                .frame(minWidth: 1080, minHeight: 640)
+                .frame(minWidth: 780, minHeight: 480)
                 .preferredColorScheme(.dark)
                 .onAppear {
                     appDelegate.configure(with: model)
                 }
         }
+        .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
         .commands {
             CommandGroup(after: .newItem) {
@@ -56,8 +57,11 @@ final class SniprAppDelegate: NSObject, NSApplicationDelegate {
     private var model: SniprAppModel?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.setActivationPolicy(.accessory)
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
     }
 
     func configure(with model: SniprAppModel) {
@@ -81,6 +85,7 @@ final class SniprAppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "Show Dashboard", action: #selector(openHistory), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Open Capture Toolbar", action: #selector(openCaptureToolbar), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Capture Area", action: #selector(captureArea), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Record Screen Area", action: #selector(recordScreenArea), keyEquivalent: ""))

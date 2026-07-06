@@ -17,6 +17,11 @@ struct CaptureSettingsTab: View {
                     set: { model.preferences.saveToDiskOnCapture = $0 }
                 ))
 
+                Toggle("Show magnifier while selecting", isOn: Binding(
+                    get: { model.preferences.showCaptureMagnifier },
+                    set: { model.preferences.showCaptureMagnifier = $0 }
+                ))
+
                 LabeledContent("Format") {
                     Picker("Format", selection: Binding(
                         get: { CaptureFormatChoice(format: model.preferences.captureFormat) },

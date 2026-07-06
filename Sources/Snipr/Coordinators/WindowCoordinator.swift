@@ -9,6 +9,12 @@ import SwiftUI
 @MainActor
 @Observable
 final class WindowCoordinator {
+    private enum WindowPickerPurpose {
+        case capture
+        case recording
+        case scrollingCapture
+    }
+
     let captureStore: CaptureStore
     let preferences: SniprPreferences
     let captureEngine: CaptureEngine
@@ -85,6 +91,7 @@ final class WindowCoordinator {
         case .captureWindow: startWindowCapture()
         case .captureSelection: startCaptureArea()
         case .recordScreen: startScreenRecordingFullScreen()
+        case .recordWindow: startWindowRecording()
         case .recordSelection: startScreenRecordingArea()
         case .ocrSelection: startOCR()
         case .pickColor: startColorPick()
@@ -93,12 +100,12 @@ final class WindowCoordinator {
 
     func startCaptureArea() {
         guard captureFlowPresenter.ensureScreenRecordingAccess() else { return }
-        overlayPresenter.showCaptureOverlays(mode: .screenshot)
+        overlayPresenter.showCaptureOverlays(mode: .screenshot, showMagnifier: preferences.showCaptureMagnifier)
     }
 
     func startScreenRecordingArea() {
         guard !recordingPresenter.isRecording, captureFlowPresenter.ensureScreenRecordingAccess() else { return }
-        overlayPresenter.showCaptureOverlays(mode: .recording)
+        overlayPresenter.showCaptureOverlays(mode: .recording, showMagnifier: preferences.showCaptureMagnifier)
     }
 
     func startCaptureFullScreen() {
@@ -115,7 +122,13 @@ final class WindowCoordinator {
 
     func startWindowCapture() {
         guard captureFlowPresenter.ensureScreenRecordingAccess() else { return }
-        scrollingCaptureMode = false
+        windowPickerPurpose = .capture
+        overlayPresenter.showWindowPickerOverlays()
+    }
+
+    func startWindowRecording() {
+        guard !recordingPresenter.isRecording, captureFlowPresenter.ensureScreenRecordingAccess() else { return }
+        windowPickerPurpose = .recording
         overlayPresenter.showWindowPickerOverlays()
     }
 
@@ -125,18 +138,15 @@ final class WindowCoordinator {
     /// user clicks "Stitch Now" on the floating progress HUD.
     func startScrollingCapture() {
         guard captureFlowPresenter.ensureScreenRecordingAccess() else { return }
-        scrollingCaptureMode = true
+        windowPickerPurpose = .scrollingCapture
         overlayPresenter.showWindowPickerOverlays()
     }
 
-    /// Set when the user invokes scrolling capture. The window picker callback
-    /// reads this to decide whether to route to `captureFlowPresenter`
-    /// (single-shot) or `scrollingCapturePresenter` (frame stream).
-    private var scrollingCaptureMode: Bool = false
+    private var windowPickerPurpose: WindowPickerPurpose = .capture
 
     func startOCR() {
         guard captureFlowPresenter.ensureScreenRecordingAccess() else { return }
-        overlayPresenter.showCaptureOverlays(mode: .ocr)
+        overlayPresenter.showCaptureOverlays(mode: .ocr, showMagnifier: preferences.showCaptureMagnifier)
     }
 
     func startColorPick() {
@@ -175,6 +185,7 @@ final class WindowCoordinator {
             backing: .buffered,
             defer: false
         )
+        SniprDiagnostics.disableRestoration(for: window)
         window.title = "OCR History"
         window.contentView = NSHostingView(rootView: view)
         window.center()
@@ -232,6 +243,17 @@ final class WindowCoordinator {
     }
 
     func clearStack() {
+        guard !captureStore.items.isEmpty else { hideThumbnailStack(); return }
+
+        let alert = NSAlert()
+        alert.messageText = "Clear the stack?"
+        alert.informativeText = "This deletes all \(captureStore.items.count) captured files. This cannot be undone."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Clear Stack").hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate()
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
         do { try captureStore.clear(); hideThumbnailStack() }
         catch { NSAlert(error: error).runModal() }
     }
@@ -243,13 +265,17 @@ final class WindowCoordinator {
         if commandPalettePresenter == nil { commandPalettePresenter = CommandPalettePresenter(coordinator: self) }
         commandPalettePresenter?.show()
     }
-    func hideCommandPalette() { commandPalettePresenter?.hide() }
+    func hideCommandPalette() {
+        commandPalettePresenter?.hide()
+    }
 
     func showCaptureToolbar() {
         if captureToolbarPresenter == nil { captureToolbarPresenter = CaptureToolbarPresenter(coordinator: self) }
         captureToolbarPresenter?.show()
     }
-    func hideCaptureToolbar() { captureToolbarPresenter?.hide() }
+    func hideCaptureToolbar() {
+        captureToolbarPresenter?.hide()
+    }
 
     func openMainWindow() {
         NSApp.activate(ignoringOtherApps: true)
@@ -259,8 +285,8 @@ final class WindowCoordinator {
     }
 
     func openSettingsWindow() {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
         NSApp.activate(ignoringOtherApps: true)
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
     }
 
     /// Restore the default overlay handlers after a workflow temporarily
@@ -294,18 +320,22 @@ final class WindowCoordinator {
         overlayPresenter.onSelectionComplete = { [weak self] mode, displayID, screen, rect in
             self?.handleSelection(mode: mode, displayID: displayID, screen: screen, rect: rect)
         }
-        overlayPresenter.onWindowPicked = { [weak self] entry, displayID, _, _ in
+        overlayPresenter.onWindowPicked = { [weak self] entry, displayID, screen, rect in
             guard let self else { return }
-            if self.scrollingCaptureMode {
-                self.scrollingCaptureMode = false
-                self.startScrolling(entry: entry)
-            } else {
+            switch self.windowPickerPurpose {
+            case .capture:
                 self.captureFlowPresenter.captureWindow(
                     scWindowID: entry.scWindowID,
                     displayID: displayID,
                     windowTitle: entry.title,
                     appName: entry.appName
                 )
+            case .recording:
+                self.windowPickerPurpose = .capture
+                self.recordingPresenter.start(displayID: displayID, screen: screen, rect: rect)
+            case .scrollingCapture:
+                self.windowPickerPurpose = .capture
+                self.startScrolling(entry: entry)
             }
         }
         overlayPresenter.onCancel = nil

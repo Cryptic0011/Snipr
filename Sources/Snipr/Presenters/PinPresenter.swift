@@ -34,11 +34,14 @@ final class PinPresenter {
 
     func pin(item: CaptureItem, onCopy: @escaping () -> Void, onSave: @escaping () -> Void) {
         guard panels[item.id] == nil else {
-            panels[item.id]?.makeKeyAndOrderFront(nil)
+            if let panel = panels[item.id] {
+                panel.makeKeyAndOrderFront(nil)
+            }
             return
         }
 
         guard let image = NSImage(contentsOf: item.fileURL) else {
+            SniprDiagnostics.windowing.error("PinPresenter pin failed imageLoad itemID=\(item.id.uuidString, privacy: .public)")
             return
         }
 
@@ -55,18 +58,21 @@ final class PinPresenter {
                 self?.unpin(itemID: item.id)
             }
         )
+        SniprDiagnostics.disableRestoration(for: panel)
         panels[item.id] = panel
         panel.makeKeyAndOrderFront(nil)
     }
 
     func unpin(itemID: UUID) {
         guard let panel = panels.removeValue(forKey: itemID) else { return }
+        panel.contentView = nil
         panel.orderOut(nil)
         panel.close()
     }
 
     func unpinAll() {
         for (_, panel) in panels {
+            panel.contentView = nil
             panel.orderOut(nil)
             panel.close()
         }

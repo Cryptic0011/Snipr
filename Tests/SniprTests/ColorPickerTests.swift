@@ -77,4 +77,15 @@ final class ColorPickerTests: XCTestCase {
         XCTAssertEqual(sample.green, 0.0, accuracy: 0.01)
         XCTAssertEqual(sample.blue, 0.0, accuracy: 0.01)
     }
+
+    func testImagePointUsesActualViewToImageScale() {
+        let point = ColorPicker.imagePoint(
+            fromViewPoint: CGPoint(x: 500, y: 300),
+            viewSize: CGSize(width: 1000, height: 600),
+            imageSize: CGSize(width: 2560, height: 1600)
+        )
+
+        XCTAssertEqual(point.x, 1280, accuracy: 0.001)
+        XCTAssertEqual(point.y, 800, accuracy: 0.001)
+    }
 }

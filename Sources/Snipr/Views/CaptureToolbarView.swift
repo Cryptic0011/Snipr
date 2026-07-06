@@ -5,6 +5,7 @@ enum CaptureToolbarMode: String, CaseIterable, Identifiable {
     case captureWindow
     case captureSelection
     case recordScreen
+    case recordWindow
     case recordSelection
     case ocrSelection
     case pickColor
@@ -21,6 +22,8 @@ enum CaptureToolbarMode: String, CaseIterable, Identifiable {
             "Capture Selected Portion"
         case .recordScreen:
             "Record Entire Screen"
+        case .recordWindow:
+            "Record Window"
         case .recordSelection:
             "Record Selected Portion"
         case .ocrSelection:
@@ -40,6 +43,8 @@ enum CaptureToolbarMode: String, CaseIterable, Identifiable {
             "selection.pin.in.out"
         case .recordScreen:
             "record.circle"
+        case .recordWindow:
+            "inset.filled.rectangle.badge.record"
         case .recordSelection:
             "rectangle.dashed.badge.record"
         case .ocrSelection:
@@ -53,7 +58,7 @@ enum CaptureToolbarMode: String, CaseIterable, Identifiable {
         switch self {
         case .captureScreen, .captureWindow, .captureSelection:
             "Capture"
-        case .recordScreen, .recordSelection:
+        case .recordScreen, .recordWindow, .recordSelection:
             "Record"
         case .ocrSelection:
             "OCR"
@@ -71,7 +76,6 @@ struct CaptureToolbarView: View {
     @State private var selectedMode: CaptureToolbarMode = .captureSelection
 
     let onCancel: () -> Void
-    let onOptions: () -> Void
     let onExecute: (CaptureToolbarMode) -> Void
 
     var body: some View {
@@ -95,30 +99,13 @@ struct CaptureToolbarView: View {
                 .frame(height: 30)
                 .padding(.horizontal, 6)
 
-            toolbarButtons(for: [.recordScreen, .recordSelection])
+            toolbarButtons(for: [.recordScreen, .recordWindow, .recordSelection])
 
             Divider()
                 .frame(height: 30)
                 .padding(.horizontal, 6)
 
             toolbarButtons(for: [.ocrSelection, .pickColor])
-
-            Divider()
-                .frame(height: 30)
-                .padding(.horizontal, 8)
-
-            Button {
-                onOptions()
-            } label: {
-                HStack(spacing: 4) {
-                    Text("Options")
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .bold))
-                }
-                .frame(height: 34)
-                .padding(.horizontal, 10)
-            }
-            .buttonStyle(CaptureToolbarTextButtonStyle())
 
             Divider()
                 .frame(height: 30)

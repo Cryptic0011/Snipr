@@ -18,7 +18,7 @@ struct AdvancedSettingsTab: View {
             }
 
             Section("Workflows") {
-                Text("Built-in chained workflows live in the command palette under their own section. Translate steps require macOS 14.4+.")
+                Text("Built-in chained workflows live in the command palette under their own section. Translate steps are not yet available and will throw an error.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 ForEach(Workflow.builtIns) { workflow in

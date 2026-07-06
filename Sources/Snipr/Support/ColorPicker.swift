@@ -23,6 +23,21 @@ enum ColorOutputFormat: String, CaseIterable, Codable, Identifiable, Sendable {
 /// Pure-math helpers for the color picker / pixel sampler. Kept out of any
 /// view so it's trivially unit-testable.
 enum ColorPicker {
+    /// Convert overlay view coordinates (top-left origin) to captured image
+    /// pixel coordinates. This uses the actual view and image sizes rather
+    /// than `NSScreen.backingScaleFactor`, because scaled displays can have
+    /// different x/y ratios than a simple 1x or 2x point multiplier.
+    static func imagePoint(fromViewPoint point: CGPoint, viewSize: CGSize, imageSize: CGSize) -> CGPoint {
+        guard viewSize.width > 0, viewSize.height > 0 else {
+            return point
+        }
+
+        return CGPoint(
+            x: point.x * imageSize.width / viewSize.width,
+            y: point.y * imageSize.height / viewSize.height
+        )
+    }
+
     /// Format a sampled color (each channel in [0, 1]) according to the chosen
     /// output format.
     static func format(red: Double, green: Double, blue: Double, format: ColorOutputFormat) -> String {

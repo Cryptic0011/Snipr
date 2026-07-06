@@ -22,6 +22,7 @@ final class OverlayPresenter {
     private var hostViews: [CaptureSelectionNSView] = []
     private var pickerViews: [WindowPickerNSView] = []
     private var colorPickerViews: [ColorPickerOverlayView] = []
+    private let selectionCoordinator = CaptureOverlaySelectionCoordinator()
     private var activeMode: CaptureOverlayMode?
     var onSelectionComplete: ((CaptureOverlayMode, CGDirectDisplayID, NSScreen, CGRect) -> Void)?
     var onWindowPicked: ((WindowPickerNSView.WindowEntry, CGDirectDisplayID, NSScreen, CGRect) -> Void)?
@@ -30,9 +31,13 @@ final class OverlayPresenter {
 
     init() {}
 
-    func showCaptureOverlays(mode: CaptureOverlayMode) {
+    func showCaptureOverlays(mode: CaptureOverlayMode, showMagnifier: Bool = false) {
         closeCaptureOverlays()
         activeMode = mode
+        selectionCoordinator.reset()
+        selectionCoordinator.onChange = { [weak self] in
+            self?.hostViews.forEach { $0.needsDisplay = true }
+        }
 
         var hostViews: [CaptureSelectionNSView] = []
 
@@ -42,12 +47,22 @@ final class OverlayPresenter {
             }
 
             let view = CaptureSelectionNSView()
+            view.selectionCoordinator = selectionCoordinator
+            view.showsMagnifier = showMagnifier
+            view.onCompleteInScreenCoordinates = { [weak self] globalRect, releasePoint in
+                self?.completeSelection(globalRect: globalRect, releasePoint: releasePoint)
+            }
             view.onComplete = { [weak self] rect in
                 self?.completeSelection(displayID: displayID, screen: screen, rect: rect)
             }
             view.onCancel = { [weak self] in
                 self?.closeCaptureOverlays()
                 self?.onCancel?()
+            }
+            view.onPointerPreviewActivated = { [weak self] activeView in
+                self?.hostViews
+                    .filter { $0 !== activeView }
+                    .forEach { $0.hidePointerPreview() }
             }
             view.sourceScale = screen.backingScaleFactor
 
@@ -121,6 +136,11 @@ final class OverlayPresenter {
                 self?.onCancel?()
                 self?.onColorSampled = nil
             }
+            view.onPointerPreviewActivated = { [weak self] activeView in
+                self?.colorPickerViews
+                    .filter { $0 !== activeView }
+                    .forEach { $0.hidePointerPreview() }
+            }
 
             let window = makePanel(frame: screen.frame, content: view)
             overlayWindows.append(window)
@@ -136,6 +156,12 @@ final class OverlayPresenter {
     }
 
     func closeCaptureOverlays() {
+        guard !overlayWindows.isEmpty || !hostViews.isEmpty || !pickerViews.isEmpty || !colorPickerViews.isEmpty else {
+            selectionCoordinator.reset()
+            selectionCoordinator.onChange = nil
+            activeMode = nil
+            return
+        }
         overlayWindows.forEach { window in
             window.contentView = nil
             window.orderOut(nil)
@@ -145,6 +171,8 @@ final class OverlayPresenter {
         hostViews.removeAll()
         pickerViews.removeAll()
         colorPickerViews.removeAll()
+        selectionCoordinator.reset()
+        selectionCoordinator.onChange = nil
         activeMode = nil
     }
 
@@ -155,6 +183,7 @@ final class OverlayPresenter {
             backing: .buffered,
             defer: false
         )
+        SniprDiagnostics.disableRestoration(for: panel)
         panel.level = .screenSaver
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         panel.backgroundColor = .clear
@@ -173,6 +202,48 @@ final class OverlayPresenter {
         onSelectionComplete?(mode, displayID, screen, rect)
     }
 
+    private func completeSelection(globalRect: CGRect, releasePoint: CGPoint) {
+        guard let mode = activeMode,
+              let target = targetScreen(for: globalRect, releasePoint: releasePoint),
+              let rect = CaptureOverlaySelectionCoordinator.selectionRect(
+                forGlobalRect: globalRect,
+                inScreenFrame: target.screen.frame
+              ),
+              rect.width >= 4,
+              rect.height >= 4 else {
+            closeCaptureOverlays()
+            onCancel?()
+            return
+        }
+
+        closeCaptureOverlays()
+        onSelectionComplete?(mode, target.displayID, target.screen, rect)
+    }
+
+    private func targetScreen(
+        for globalRect: CGRect,
+        releasePoint: CGPoint
+    ) -> (displayID: CGDirectDisplayID, screen: NSScreen)? {
+        let screens = NSScreen.screens.compactMap { screen -> (displayID: CGDirectDisplayID, screen: NSScreen)? in
+            guard let displayID = screen.sniprDisplayID else { return nil }
+            return (displayID, screen)
+        }
+
+        if let screenUnderRelease = screens.first(where: { $0.screen.frame.contains(releasePoint) }) {
+            return screenUnderRelease
+        }
+
+        let candidates: [(displayID: CGDirectDisplayID, screen: NSScreen, area: CGFloat)] = screens.map { candidate in
+            let clipped = globalRect.intersection(candidate.screen.frame)
+            let area = clipped.isNull ? 0 : clipped.width * clipped.height
+            return (candidate.displayID, candidate.screen, area)
+        }
+        guard let best = candidates.filter({ $0.area > 0 }).max(by: { $0.area < $1.area }) else {
+            return nil
+        }
+        return (best.displayID, best.screen)
+    }
+
     private func loadDisplayImagesAndWindows() async {
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
@@ -186,6 +257,7 @@ final class OverlayPresenter {
     private func loadWindowsForPicker() async {
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            let overlayCGWindowIDs = Set(overlayWindows.map { CGWindowID($0.windowNumber) })
             for view in pickerViews {
                 guard let screen = view.window?.screen, let displayID = screen.sniprDisplayID else { continue }
                 let entries: [WindowPickerNSView.WindowEntry] = content.windows.compactMap { window in
@@ -199,7 +271,7 @@ final class OverlayPresenter {
                         appName: window.owningApplication?.applicationName
                     )
                 }
-                view.setWindows(entries)
+                view.setWindows(entries, excludingWindowIDs: overlayCGWindowIDs)
             }
         } catch {
             // Non-fatal: picker still cancels on right-click / Esc even with

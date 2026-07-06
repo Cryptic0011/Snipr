@@ -101,6 +101,9 @@ private struct CollapsedPile: View {
         }
         .padding(8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(
+            MultiFileDragView(urlsProvider: { store.items.map(\.fileURL) })
+        )
     }
 }
 
@@ -206,11 +209,11 @@ private struct ExpandedSidebar: View {
 
             Menu {
                 Button("Save All to Folder…") { saveAllToFolder() }
-                    .disabled(activeImageItems().isEmpty && activeItems().isEmpty)
+                    .disabled(store.items.isEmpty)
                 Button("Combine into PDF…") { combineIntoPDF() }
-                    .disabled(activeImageItems().isEmpty)
+                    .disabled(!store.items.contains { $0.mediaType == .image })
                 Button("Stitch Vertically…") { stitchVertically() }
-                    .disabled(activeImageItems().isEmpty)
+                    .disabled(!store.items.contains { $0.mediaType == .image })
                 Divider()
                 Button("Clear Stack", role: .destructive) {
                     coordinator.clearStack()
@@ -308,7 +311,9 @@ private struct ExpandedSidebar: View {
     }
 
     /// Items the keyboard / batch action should target — selection if any,
-    /// else the currently focused row, else the entire visible stack.
+    /// else the currently focused row, else nothing. Batch actions that want
+    /// "whole stack when nothing is selected" implement that fallback
+    /// explicitly; keyboard Delete/⌘C must never silently target everything.
     private func activeItems() -> [CaptureItem] {
         if !selection.isEmpty {
             return store.items.filter { selection.contains($0.id) }
@@ -317,7 +322,7 @@ private struct ExpandedSidebar: View {
            let item = store.items.first(where: { $0.id == id }) {
             return [item]
         }
-        return store.items
+        return []
     }
 
     private func activeImageItems() -> [CaptureItem] {
@@ -326,10 +331,9 @@ private struct ExpandedSidebar: View {
 
     /// URLs dragged out when the user begins a drag from `item`.
     ///
-    /// Per the Phase 2 brief: drag carries the selection if any, else all
-    /// visible items so the user can fling the entire stack into Discord
-    /// without first multi-selecting. If a drag fires on a row outside the
-    /// current selection, that one row wins.
+    /// Drag carries the selection when the dragged row is selected; otherwise
+    /// the specific row under the cursor wins. Dragging the collapsed pile is
+    /// still the "send the whole stack" gesture.
     private func dragURLs(triggeredBy item: CaptureItem) -> [URL] {
         if !selection.isEmpty {
             if selection.contains(item.id) {
@@ -339,7 +343,7 @@ private struct ExpandedSidebar: View {
             }
             return [item.fileURL]
         }
-        return store.items.map(\.fileURL)
+        return [item.fileURL]
     }
 
     // MARK: Batch actions
@@ -420,13 +424,17 @@ private struct SidebarRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            MediaThumbnailView(
-                item: item,
-                size: CGSize(width: 92, height: 60),
-                cornerRadius: 4
-            )
-            .background(Color.black.opacity(0.45))
-            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+            ZStack {
+                MediaThumbnailView(
+                    item: item,
+                    size: CGSize(width: 92, height: 60),
+                    cornerRadius: 4
+                )
+                .background(Color.black.opacity(0.45))
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                MultiFileDragView(urlsProvider: dragURLs)
+                    .frame(width: 92, height: 60)
+            }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.filename)

@@ -34,6 +34,7 @@ final class CaptureToolbarPresenter {
             backing: .buffered,
             defer: false
         )
+        SniprDiagnostics.disableRestoration(for: panel)
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.backgroundColor = .clear
@@ -43,9 +44,6 @@ final class CaptureToolbarPresenter {
             rootView: CaptureToolbarView(
                 onCancel: { [weak self] in
                     self?.hide()
-                },
-                onOptions: { [weak coordinator] in
-                    coordinator?.openSettingsWindow()
                 },
                 onExecute: { [weak coordinator] mode in
                     coordinator?.executeCaptureToolbarMode(mode)
@@ -57,8 +55,10 @@ final class CaptureToolbarPresenter {
     }
 
     func hide() {
-        panel?.orderOut(nil)
-        panel?.close()
-        panel = nil
+        guard let panel else { return }
+        panel.contentView = nil
+        panel.orderOut(nil)
+        panel.close()
+        self.panel = nil
     }
 }

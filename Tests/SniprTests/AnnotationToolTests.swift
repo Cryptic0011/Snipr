@@ -54,6 +54,19 @@ final class AnnotationToolTests: XCTestCase {
         }
     }
 
+    func testEditorToolsExcludeCropButKeepOtherTools() {
+        XCTAssertFalse(AnnotationKind.editorTools.contains(.crop))
+        XCTAssertTrue(AnnotationKind.allCases.contains(.crop))
+        XCTAssertTrue(AnnotationKind.editorTools.contains(.pixelate))
+        XCTAssertTrue(AnnotationKind.editorTools.contains(.blur))
+    }
+
+    func testLiveEffectPreviewIncludesPixelateAndBlur() {
+        XCTAssertTrue(AnnotationEffectPreview.supportsLivePreview(.blur))
+        XCTAssertTrue(AnnotationEffectPreview.supportsLivePreview(.pixelate))
+        XCTAssertFalse(AnnotationEffectPreview.supportsLivePreview(.rectangle))
+    }
+
     // MARK: - Draw — happy paths just need to not crash and to mutate the context.
     func testEachToolDrawsWithoutCrashing() {
         for kind in AnnotationKind.allCases {
