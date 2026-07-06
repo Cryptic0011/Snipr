@@ -382,7 +382,11 @@ private struct AnnotationCanvasView: View {
             displayRect: displayRect
         )
         let opacity = isDraft ? 0.74 : 1.0
-        let stroke = StrokeStyle(lineWidth: annotation.lineWidth, lineCap: .round, lineJoin: .round)
+        // Annotation geometry (start/end/lineWidth/fontSize) lives in image
+        // pixels; the canvas paints in view points. Scale painted sizes by the
+        // same factor as positions so the live preview matches the export.
+        let scale = imageSize.width > 0 ? displayRect.width / imageSize.width : 1
+        let stroke = StrokeStyle(lineWidth: annotation.lineWidth * scale, lineCap: .round, lineJoin: .round)
 
         switch annotation.kind {
         case .arrow:
@@ -390,7 +394,12 @@ private struct AnnotationCanvasView: View {
             path.move(to: start)
             path.addLine(to: end)
             context.stroke(path, with: .color(annotation.ink.color.opacity(opacity)), style: stroke)
-            drawArrowHead(from: start, to: end, color: annotation.ink.color.opacity(opacity), lineWidth: annotation.lineWidth, in: &context)
+            drawArrowHead(from: start, to: end, color: annotation.ink.color.opacity(opacity), lineWidth: annotation.lineWidth * scale, scale: scale, in: &context)
+        case .line:
+            var path = Path()
+            path.move(to: start)
+            path.addLine(to: end)
+            context.stroke(path, with: .color(annotation.ink.color.opacity(opacity)), style: stroke)
         case .rectangle:
             context.stroke(Path(bounds), with: .color(annotation.ink.color.opacity(opacity)), style: stroke)
         case .ellipse:
@@ -404,16 +413,18 @@ private struct AnnotationCanvasView: View {
         case .crop:
             context.stroke(Path(bounds), with: .color(.yellow.opacity(opacity)), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
         case .text:
+            let fontSize = annotation.fontSize * scale
             if !annotation.text.isEmpty {
                 let resolved = context.resolve(Text(annotation.text)
-                    .font(.system(size: annotation.fontSize, weight: .semibold))
+                    .font(.system(size: fontSize, weight: .semibold))
                     .foregroundColor(annotation.ink.color.opacity(opacity)))
                 context.draw(resolved, at: start, anchor: .bottomLeading)
             } else if isDraft {
-                context.stroke(Path(roundedRect: CGRect(x: start.x, y: start.y - annotation.fontSize, width: 80, height: annotation.fontSize), cornerRadius: 4), with: .color(.white.opacity(0.5)), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                context.stroke(Path(roundedRect: CGRect(x: start.x, y: start.y - fontSize, width: 80 * scale, height: fontSize), cornerRadius: 4), with: .color(.white.opacity(0.5)), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
             }
         case .step:
-            let radius = max(14, annotation.lineWidth * 3)
+            // Same radius formula as StepTool so the preview matches the export.
+            let radius = max(18, annotation.lineWidth * 4) * scale
             let circle = CGRect(x: start.x - radius, y: start.y - radius, width: radius * 2, height: radius * 2)
             context.fill(Path(ellipseIn: circle), with: .color(annotation.ink.color.opacity(opacity)))
             context.stroke(Path(ellipseIn: circle), with: .color(.white), lineWidth: 2)
@@ -430,10 +441,12 @@ private struct AnnotationCanvasView: View {
         to end: CGPoint,
         color: Color,
         lineWidth: CGFloat,
+        scale: CGFloat,
         in context: inout GraphicsContext
     ) {
         let angle = atan2(end.y - start.y, end.x - start.x)
-        let length: CGFloat = 20
+        // Same head length as ArrowTool so the preview matches the export.
+        let length: CGFloat = 18 * scale
         let spread: CGFloat = .pi / 7
         let first = CGPoint(
             x: end.x - length * cos(angle - spread),

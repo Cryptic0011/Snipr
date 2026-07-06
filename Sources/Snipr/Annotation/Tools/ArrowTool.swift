@@ -41,22 +41,6 @@ struct ArrowTool: AnnotationTool {
     }
 
     func hitTest(_ layer: AnnotationLayer, point: CGPoint) -> Bool {
-        // Distance-from-segment hit test — keeps the arrow "selectable" along
-        // its length, not just inside its bounding rect.
-        distanceFromSegment(point: point, a: layer.start, b: layer.end) <= max(8, layer.lineWidth)
-    }
-
-    private func distanceFromSegment(point: CGPoint, a: CGPoint, b: CGPoint) -> CGFloat {
-        let dx = b.x - a.x
-        let dy = b.y - a.y
-        let lenSq = dx * dx + dy * dy
-        guard lenSq > 0 else {
-            return hypot(point.x - a.x, point.y - a.y)
-        }
-        var t = ((point.x - a.x) * dx + (point.y - a.y) * dy) / lenSq
-        t = max(0, min(1, t))
-        let projX = a.x + t * dx
-        let projY = a.y + t * dy
-        return hypot(point.x - projX, point.y - projY)
+        AnnotationGeometry.distanceFromSegment(point: point, a: layer.start, b: layer.end) <= max(8, layer.lineWidth)
     }
 }

@@ -73,6 +73,7 @@ extension AnnotationTool {
 enum AnnotationToolRegistry {
     static let tools: [AnnotationKind: any AnnotationTool] = [
         .arrow: ArrowTool(),
+        .line: LineTool(),
         .rectangle: RectangleTool(),
         .ellipse: EllipseTool(),
         .blur: BlurTool(),
@@ -97,5 +98,22 @@ enum AnnotationGeometry {
 
     static func flip(_ rect: CGRect, imageHeight: CGFloat) -> CGRect {
         CGRect(x: rect.minX, y: imageHeight - rect.maxY, width: rect.width, height: rect.height)
+    }
+
+    /// Distance from `point` to the segment `a`–`b`. Used by segment-shaped
+    /// tools (arrow, line) so they're selectable along their length, not just
+    /// inside their bounding rect.
+    static func distanceFromSegment(point: CGPoint, a: CGPoint, b: CGPoint) -> CGFloat {
+        let dx = b.x - a.x
+        let dy = b.y - a.y
+        let lenSq = dx * dx + dy * dy
+        guard lenSq > 0 else {
+            return hypot(point.x - a.x, point.y - a.y)
+        }
+        var t = ((point.x - a.x) * dx + (point.y - a.y) * dy) / lenSq
+        t = max(0, min(1, t))
+        let projX = a.x + t * dx
+        let projY = a.y + t * dy
+        return hypot(point.x - projX, point.y - projY)
     }
 }

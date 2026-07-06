@@ -87,6 +87,22 @@ final class AnnotationToolTests: XCTestCase {
         XCTAssertFalse(tool.hitTest(layer, point: CGPoint(x: 50, y: 50)))
     }
 
+    func testLineHitTestSnapsAlongSegment() {
+        let tool = LineTool()
+        let layer = makeLayer(kind: .line, start: CGPoint(x: 0, y: 0), end: CGPoint(x: 100, y: 0))
+        XCTAssertTrue(tool.hitTest(layer, point: CGPoint(x: 50, y: 0)))
+        XCTAssertTrue(tool.hitTest(layer, point: CGPoint(x: 50, y: 5)))
+        XCTAssertFalse(tool.hitTest(layer, point: CGPoint(x: 50, y: 50)))
+    }
+
+    func testLineDrawStrokesPixelsAlongTheSegment() {
+        let (drawCtx, context, base) = makeContext()
+        let layer = makeLayer(kind: .line, start: CGPoint(x: 10, y: 30), end: CGPoint(x: 70, y: 30))
+        LineTool().draw(layer, in: drawCtx)
+        let drawn = context.makeImage()!
+        XCTAssertFalse(drawn.dataProvider!.data! == base.dataProvider!.data!, "Line should change pixels")
+    }
+
     func testRectangleHitTestStrokeOnly() {
         let tool = RectangleTool()
         let layer = makeLayer(kind: .rectangle, start: CGPoint(x: 0, y: 0), end: CGPoint(x: 100, y: 100))

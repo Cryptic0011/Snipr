@@ -4,6 +4,7 @@ import SwiftUI
 
 enum AnnotationKind: String, CaseIterable, Identifiable, Codable, Sendable {
     case arrow
+    case line
     case rectangle
     case ellipse
     case blur
@@ -23,6 +24,8 @@ enum AnnotationKind: String, CaseIterable, Identifiable, Codable, Sendable {
         switch self {
         case .arrow:
             "Arrow"
+        case .line:
+            "Line"
         case .rectangle:
             "Box"
         case .ellipse:
@@ -46,6 +49,8 @@ enum AnnotationKind: String, CaseIterable, Identifiable, Codable, Sendable {
         switch self {
         case .arrow:
             "arrow.up.right"
+        case .line:
+            "line.diagonal"
         case .rectangle:
             "rectangle"
         case .ellipse:
