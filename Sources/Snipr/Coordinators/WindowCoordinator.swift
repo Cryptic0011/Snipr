@@ -26,6 +26,10 @@ final class WindowCoordinator {
     private var commandPalettePresenter: CommandPalettePresenter?
     private var captureToolbarPresenter: CaptureToolbarPresenter?
 
+    /// Set by the app delegate, which owns the dashboard window. Hotkeys and
+    /// palette commands route "open the app" through here.
+    var onOpenMainWindow: (() -> Void)?
+
     let ocrHistory: OCRHistoryStore
     let pinPresenter: PinPresenter
     let translationEngine: any TranslationEngine
@@ -72,8 +76,7 @@ final class WindowCoordinator {
         case .recordArea: startScreenRecordingArea()
         case .captureToolbar: showCaptureToolbar()
         case .openHistory:
-            NSApp.activate(ignoringOtherApps: true)
-            NSApp.windows.first?.makeKeyAndOrderFront(nil)
+            openMainWindow()
         case .clearStack: clearStack()
         case .openSettings: openSettingsWindow()
         case .quit: NSApp.terminate(nil)
@@ -161,6 +164,7 @@ final class WindowCoordinator {
             )
             ClipboardSink.copyText(formatted)
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+            ToastPresenter.show("\(formatted) copied")
         }
     }
 
@@ -216,6 +220,7 @@ final class WindowCoordinator {
     func recopyOCREntry(_ entry: OCRHistoryEntry) {
         ClipboardSink.copyText(entry.text)
         NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+        ToastPresenter.show("Text copied")
     }
 
     func captureLastRegion() {
@@ -278,10 +283,13 @@ final class WindowCoordinator {
     }
 
     func openMainWindow() {
-        NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first(where: { $0.title == "Snipr" }) ?? NSApp.windows.first(where: { $0.canBecomeMain }) {
-            window.makeKeyAndOrderFront(nil)
+        if let onOpenMainWindow {
+            onOpenMainWindow()
+            return
         }
+        // Fallback (tests construct the coordinator without an app delegate).
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.windows.first(where: { $0.title == "Snipr" })?.makeKeyAndOrderFront(nil)
     }
 
     func openSettingsWindow() {

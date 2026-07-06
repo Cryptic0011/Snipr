@@ -9,21 +9,26 @@ struct CommandPaletteView: View {
     let onExecuteWorkflow: (Workflow) -> Void
 
     /// Workflows surfaced under their own section. Defaults to the
-    /// Phase 4 built-in trio; tests can supply their own.
+    /// built-ins; tests can supply their own.
     let workflows: [Workflow]
+
+    /// The user's live hotkey bindings, so shortcut hints track rebinds.
+    let hotKeyBindings: [SniprHotKeyAction: HotKeyBinding]
 
     init(
         workflows: [Workflow] = Workflow.builtIns,
+        hotKeyBindings: [SniprHotKeyAction: HotKeyBinding] = HotKeyDefaults.bindings,
         onExecute: @escaping (SniprCommand) -> Void,
         onExecuteWorkflow: @escaping (Workflow) -> Void = { _ in }
     ) {
         self.workflows = workflows
+        self.hotKeyBindings = hotKeyBindings
         self.onExecute = onExecute
         self.onExecuteWorkflow = onExecuteWorkflow
     }
 
     private var commands: [SniprCommand] {
-        SniprCommand.filtered(by: query)
+        SniprCommand.filtered(by: query, bindings: hotKeyBindings)
     }
 
     private var filteredWorkflows: [Workflow] {

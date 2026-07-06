@@ -12,6 +12,23 @@ enum SniprCommandID: String, CaseIterable, Codable, Sendable {
     case showOCRHistory
     case pickColor
     case scrollingCapture
+
+    /// The hotkey action whose user-configured binding supplies this
+    /// command's shortcut hint. Commands without one show a fixed system
+    /// shortcut (⌘, / ⌘Q) or none.
+    var hotKeyAction: SniprHotKeyAction? {
+        switch self {
+        case .captureArea: .captureArea
+        case .recordArea: .screenRecord
+        case .captureToolbar: .captureToolbar
+        case .openHistory: .openApp
+        case .clearStack: .clearStack
+        case .ocrSelection: .ocr
+        case .pickColor: .colorPick
+        case .scrollingCapture: .scrollingCapture
+        case .openSettings, .quit, .showOCRHistory: nil
+        }
+    }
 }
 
 struct SniprCommand: Identifiable, Equatable, Sendable {
@@ -19,7 +36,20 @@ struct SniprCommand: Identifiable, Equatable, Sendable {
     let title: String
     let subtitle: String
     let systemImage: String
-    let shortcut: String
+    var shortcut: String
+
+    /// The palette rendered from the user's actual bindings — rebinding a
+    /// hotkey updates the hint instead of showing a stale hard-coded string.
+    static func all(bindings: [SniprHotKeyAction: HotKeyBinding]) -> [SniprCommand] {
+        all.map { command in
+            guard let action = command.id.hotKeyAction, let binding = bindings[action] else {
+                return command
+            }
+            var updated = command
+            updated.shortcut = binding.isEnabled ? binding.displayText : ""
+            return updated
+        }
+    }
 
     static let all: [SniprCommand] = [
         .init(
@@ -101,11 +131,12 @@ struct SniprCommand: Identifiable, Equatable, Sendable {
         )
     ]
 
-    static func filtered(by query: String) -> [SniprCommand] {
+    static func filtered(by query: String, bindings: [SniprHotKeyAction: HotKeyBinding]? = nil) -> [SniprCommand] {
+        let commands = bindings.map(all(bindings:)) ?? all
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !trimmedQuery.isEmpty else {
-            return all
+            return commands
         }
 
         let tokens = trimmedQuery
@@ -113,7 +144,7 @@ struct SniprCommand: Identifiable, Equatable, Sendable {
             .split(separator: " ")
             .map(String.init)
 
-        let titleMatches = all.filter { command in
+        let titleMatches = commands.filter { command in
             matches(tokens, in: command.title)
         }
 
@@ -121,7 +152,7 @@ struct SniprCommand: Identifiable, Equatable, Sendable {
             return titleMatches
         }
 
-        return all.filter { command in
+        return commands.filter { command in
             matches(tokens, in: "\(command.title) \(command.subtitle) \(command.id.rawValue)")
         }
     }

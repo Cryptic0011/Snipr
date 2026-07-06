@@ -3,75 +3,95 @@ import SwiftUI
 @main
 struct SniprApp: App {
     @NSApplicationDelegateAdaptor(SniprAppDelegate.self) private var appDelegate
-    @State private var model = SniprAppModel()
 
     var body: some Scene {
-        WindowGroup {
-            ContentView(model: model)
-                .frame(minWidth: 780, minHeight: 480)
-                .preferredColorScheme(.dark)
-                .onAppear {
-                    appDelegate.configure(with: model)
-                }
+        // The dashboard is a delegate-owned NSWindow (see showDashboard), not
+        // a WindowGroup: SwiftUI destroys a closed WindowGroup window and an
+        // accessory app has no Dock icon or menu to summon it back, which
+        // left "Show Dashboard" dead after the first close.
+        Settings {
+            SettingsView(model: appDelegate.model)
         }
-        .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
+        // No keyboardShortcut on these: the same shortcuts are registered
+        // globally through HotKeyService from the user's bindings, and
+        // hard-coded menu copies would show stale hints after a rebind.
         .commands {
             CommandGroup(after: .newItem) {
                 Button("Open Capture Toolbar") {
-                    model.coordinator.showCaptureToolbar()
+                    appDelegate.model.coordinator.showCaptureToolbar()
                 }
-                .keyboardShortcut("5", modifiers: [.command, .shift])
 
                 Button("Capture Area") {
-                    model.coordinator.startCaptureArea()
+                    appDelegate.model.coordinator.startCaptureArea()
                 }
-                .keyboardShortcut("4", modifiers: [.command, .shift])
 
                 Button("Record Screen Area") {
-                    model.coordinator.startScreenRecordingArea()
+                    appDelegate.model.coordinator.startScreenRecordingArea()
                 }
-                .keyboardShortcut("6", modifiers: [.command, .shift])
 
                 Button("Open Command Palette") {
-                    model.coordinator.showCommandPalette()
+                    appDelegate.model.coordinator.showCommandPalette()
                 }
-                .keyboardShortcut(.space, modifiers: [.command, .shift])
 
                 Button("Clear Stack") {
-                    model.coordinator.clearStack()
+                    appDelegate.model.coordinator.clearStack()
                 }
-                .keyboardShortcut(.delete, modifiers: [.command])
             }
-        }
-
-        Settings {
-            SettingsView(model: model)
         }
     }
 }
 
 @MainActor
 final class SniprAppDelegate: NSObject, NSApplicationDelegate {
+    let model = SniprAppModel()
     private var statusItem: NSStatusItem?
-    private var model: SniprAppModel?
+    private var dashboardWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        installStatusItem(model: model)
+        model.installHotkeys()
+        model.coordinator.onOpenMainWindow = { [weak self] in
+            self?.showDashboard()
+        }
+        showDashboard()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }
 
-    func configure(with model: SniprAppModel) {
-        guard self.model == nil else {
+    /// Create-once dashboard window. `isReleasedWhenClosed = false` means the
+    /// red close button only hides it, so every later "Show Dashboard" can
+    /// bring the same window back.
+    func showDashboard() {
+        NSApp.activate(ignoringOtherApps: true)
+
+        if let dashboardWindow {
+            dashboardWindow.makeKeyAndOrderFront(nil)
             return
         }
 
-        self.model = model
-        installStatusItem(model: model)
-        model.installHotkeys()
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 780, height: 480),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Snipr"
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isReleasedWhenClosed = false
+        window.contentMinSize = NSSize(width: 780, height: 480)
+        window.contentView = NSHostingView(
+            rootView: ContentView(model: model)
+                .frame(minWidth: 780, minHeight: 480)
+                .preferredColorScheme(.dark)
+        )
+        SniprDiagnostics.disableRestoration(for: window)
+        window.center()
+        dashboardWindow = window
+        window.makeKeyAndOrderFront(nil)
     }
 
     private func installStatusItem(model: SniprAppModel) {
@@ -102,28 +122,27 @@ final class SniprAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func captureArea() {
-        model?.coordinator.startCaptureArea()
+        model.coordinator.startCaptureArea()
     }
 
     @objc private func openCaptureToolbar() {
-        model?.coordinator.showCaptureToolbar()
+        model.coordinator.showCaptureToolbar()
     }
 
     @objc private func recordScreenArea() {
-        model?.coordinator.startScreenRecordingArea()
+        model.coordinator.startScreenRecordingArea()
     }
 
     @objc private func openPalette() {
-        model?.coordinator.showCommandPalette()
+        model.coordinator.showCommandPalette()
     }
 
     @objc private func openHistory() {
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.windows.first { $0.title == "Snipr" }?.makeKeyAndOrderFront(nil)
+        showDashboard()
     }
 
     @objc private func clearStack() {
-        model?.coordinator.clearStack()
+        model.coordinator.clearStack()
     }
 
     @objc private func quit() {

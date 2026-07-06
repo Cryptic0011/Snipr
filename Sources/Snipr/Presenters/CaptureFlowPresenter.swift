@@ -63,6 +63,7 @@ final class CaptureFlowPresenter {
             // Subtle haptic — replaces the popup the blueprint explicitly
             // calls out as a non-goal.
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+            ToastPresenter.show("Text copied")
         } catch {
             onError?(error)
         }

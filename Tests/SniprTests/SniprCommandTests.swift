@@ -1,3 +1,4 @@
+import Carbon
 import XCTest
 @testable import Snipr
 
@@ -24,5 +25,21 @@ final class SniprCommandTests: XCTestCase {
     func testSearchRequiresEveryTokenToMatch() {
         XCTAssertEqual(SniprCommand.filtered(by: "open settings").map(\.id), [.openSettings])
         XCTAssertTrue(SniprCommand.filtered(by: "open missing").isEmpty)
+    }
+
+    func testShortcutHintsFollowRebinding() {
+        var bindings = HotKeyDefaults.bindings
+        bindings[.captureArea] = HotKeyBinding(
+            keyCode: UInt32(kVK_ANSI_A),
+            modifiers: hotKeyModifiers(command: true, option: true),
+            isEnabled: true
+        )
+        bindings[.ocr]?.isEnabled = false
+
+        let commands = SniprCommand.all(bindings: bindings)
+        XCTAssertEqual(commands.first { $0.id == .captureArea }?.shortcut, bindings[.captureArea]?.displayText)
+        XCTAssertEqual(commands.first { $0.id == .ocrSelection }?.shortcut, "")
+        // Non-hotkey commands keep their fixed system shortcuts.
+        XCTAssertEqual(commands.first { $0.id == .openSettings }?.shortcut, "⌘,")
     }
 }

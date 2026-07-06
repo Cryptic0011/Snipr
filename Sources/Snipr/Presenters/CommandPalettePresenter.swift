@@ -42,6 +42,7 @@ final class CommandPalettePresenter {
         panel.isMovableByWindowBackground = true
         panel.contentView = NSHostingView(
             rootView: CommandPaletteView(
+                hotKeyBindings: coordinator.preferences.hotKeyBindings,
                 onExecute: { [weak self, weak coordinator] command in
                     self?.hide()
                     coordinator?.execute(command)
