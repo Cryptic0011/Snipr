@@ -88,6 +88,7 @@ struct CaptureToolbarView: View {
             }
             .buttonStyle(CaptureToolbarIconButtonStyle(isSelected: false))
             .help("Close")
+            .accessibilityLabel("Close capture toolbar")
 
             Divider()
                 .frame(height: 30)
@@ -152,6 +153,8 @@ struct CaptureToolbarView: View {
                 }
                 .buttonStyle(CaptureToolbarIconButtonStyle(isSelected: selectedMode == mode, isEnabled: mode.isEnabled))
                 .help(mode.isEnabled ? mode.title : "\(mode.title) coming soon")
+                .accessibilityLabel(mode.title)
+                .accessibilityAddTraits(selectedMode == mode ? .isSelected : [])
             }
         }
     }

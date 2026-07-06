@@ -118,6 +118,7 @@ struct PreviewWindowView: View {
                 ForEach(AnnotationKind.editorTools) { tool in
                     Image(systemName: tool.systemImage)
                         .help(tool.title)
+                        .accessibilityLabel(tool.title)
                         .tag(tool)
                 }
             }
@@ -138,6 +139,8 @@ struct PreviewWindowView: View {
                     }
                     .buttonStyle(.plain)
                     .help(ink.rawValue.capitalized)
+                    .accessibilityLabel("\(ink.rawValue.capitalized) ink")
+                    .accessibilityAddTraits(selectedInk == ink ? .isSelected : [])
                 }
             }
 
@@ -155,6 +158,7 @@ struct PreviewWindowView: View {
             .keyboardShortcut("z", modifiers: [.command])
             .disabled(undoStack.isEmpty)
             .help("Undo (⌘Z)")
+            .accessibilityLabel("Undo")
 
             Button {
                 redo()
@@ -164,6 +168,7 @@ struct PreviewWindowView: View {
             .keyboardShortcut("z", modifiers: [.command, .shift])
             .disabled(redoStack.isEmpty)
             .help("Redo (⇧⌘Z)")
+            .accessibilityLabel("Redo")
 
             Button {
                 deleteSelected()
@@ -173,6 +178,7 @@ struct PreviewWindowView: View {
             .keyboardShortcut(.delete, modifiers: [])
             .disabled(selection == nil)
             .help("Delete selected annotation (⌫)")
+            .accessibilityLabel("Delete selected annotation")
 
             Button {
                 pushUndo()
@@ -183,6 +189,7 @@ struct PreviewWindowView: View {
             }
             .disabled(annotations.isEmpty)
             .help("Clear annotations")
+            .accessibilityLabel("Clear annotations")
 
             Button {
                 copyAnnotatedImage()
@@ -191,6 +198,7 @@ struct PreviewWindowView: View {
             }
             .keyboardShortcut("c", modifiers: [.command])
             .help("Copy annotated image")
+            .accessibilityLabel("Copy annotated image")
 
             Button {
                 saveAnnotatedImage()
@@ -198,6 +206,7 @@ struct PreviewWindowView: View {
                 Image(systemName: "square.and.arrow.down")
             }
             .help("Save annotated image")
+            .accessibilityLabel("Save annotated image")
 
             // Phase 4 quick share: NSSharingServicePicker anchored on this
             // toolbar. Shares the original file URL — annotation export still
@@ -225,6 +234,7 @@ struct PreviewWindowView: View {
                 Image(systemName: "ellipsis.circle")
             }
             .menuStyle(.borderlessButton)
+            .accessibilityLabel("More actions")
         }
         .padding(12)
         .background(.bar)

@@ -225,6 +225,7 @@ private struct ExpandedSidebar: View {
             .menuStyle(.borderlessButton)
             .frame(width: 26, height: 22)
             .help("Batch actions")
+            .accessibilityLabel("Batch actions")
 
             Button {
                 coordinator.setThumbnailStackPinned(!coordinator.isThumbnailStackPinned)
@@ -234,6 +235,7 @@ private struct ExpandedSidebar: View {
             }
             .buttonStyle(StackIconButtonStyle(isActive: coordinator.isThumbnailStackPinned))
             .help(coordinator.isThumbnailStackPinned ? "Unpin stack" : "Pin stack")
+            .accessibilityLabel(coordinator.isThumbnailStackPinned ? "Unpin stack" : "Pin stack")
 
             Button {
                 coordinator.hideThumbnailStack()
@@ -243,6 +245,7 @@ private struct ExpandedSidebar: View {
             }
             .buttonStyle(StackIconButtonStyle(isActive: false))
             .help("Hide stack")
+            .accessibilityLabel("Hide stack")
         }
         .padding(.horizontal, 10)
         .padding(.top, 10)
@@ -550,6 +553,7 @@ private struct QuickActionButton: View {
         }
         .buttonStyle(.plain)
         .help(help)
+        .accessibilityLabel(help)
     }
 }
 
