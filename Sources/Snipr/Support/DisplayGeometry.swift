@@ -6,27 +6,25 @@ import CoreGraphics
 /// per-call rewrites of the same `displayBounds.width / screen.frame.width`
 /// scaling that sprinkled the old service files.
 enum DisplayGeometry {
-    /// Scales a rect expressed in `NSScreen` display points (top-left origin
-    /// when `screen.isFlipped`-style consumers use it) into the display's
-    /// native pixel coordinate space.
+    /// Scales a rect expressed in `NSScreen` display points into the display's
+    /// native pixel coordinate space via the screen's `backingScaleFactor`.
     ///
-    /// `ScreenCaptureKit` (`SCStreamConfiguration.sourceRect`) takes pixel
-    /// coordinates relative to the display, so all callers funnel through
-    /// this one routine.
+    /// Use this for `SCStreamConfiguration.width`/`height` (output pixel
+    /// dimensions) so ScreenCaptureKit doesn't downsample to 1× on Retina.
+    /// `SCStreamConfiguration.sourceRect` stays in display points — pass the
+    /// original points rect there, not this.
     static func pixelRect(
         forDisplayPointsRect rect: CGRect,
         displayID: CGDirectDisplayID,
         screen: NSScreen
     ) -> CGRect {
-        let displayBounds = CGDisplayBounds(displayID)
-        let scaleX = displayBounds.width / screen.frame.width
-        let scaleY = displayBounds.height / screen.frame.height
+        let scale = screen.backingScaleFactor
 
         return CGRect(
-            x: rect.minX * scaleX,
-            y: rect.minY * scaleY,
-            width: rect.width * scaleX,
-            height: rect.height * scaleY
+            x: rect.minX * scale,
+            y: rect.minY * scale,
+            width: rect.width * scale,
+            height: rect.height * scale
         ).integral
     }
 }

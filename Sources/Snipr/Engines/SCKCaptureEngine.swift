@@ -27,7 +27,7 @@ struct SCKCaptureEngine: CaptureEngine {
         }
 
         let configuration = SCStreamConfiguration()
-        configuration.sourceRect = pixelRect
+        configuration.sourceRect = rectInDisplayPoints
         configuration.width = max(2, Int(pixelRect.width.rounded()))
         configuration.height = max(2, Int(pixelRect.height.rounded()))
         configuration.scalesToFit = false

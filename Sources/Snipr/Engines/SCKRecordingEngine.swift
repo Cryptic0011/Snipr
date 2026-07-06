@@ -65,7 +65,7 @@ final class SCKRecordingEngine: NSObject, RecordingEngine {
         let height = max(2, Int(pixelRect.height.rounded()))
 
         let configuration = SCStreamConfiguration()
-        configuration.sourceRect = pixelRect
+        configuration.sourceRect = rectInDisplayPoints
         configuration.width = width
         configuration.height = height
         configuration.scalesToFit = false
