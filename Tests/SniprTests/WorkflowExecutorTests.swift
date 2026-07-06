@@ -114,9 +114,14 @@ final class WorkflowExecutorTests: XCTestCase {
 
     func testBuiltInWorkflowsExist() {
         let workflows = Workflow.builtIns
-        XCTAssertEqual(workflows.count, 3)
+        XCTAssertEqual(workflows.count, 2)
         XCTAssertEqual(workflows[0].steps, [.capture, .ocr, .clipboard])
-        XCTAssertEqual(workflows[2].steps, [.capture, .pin])
+        XCTAssertEqual(workflows[1].steps, [.capture, .pin])
+        // The translate workflow stays out of the palette until the engine
+        // actually translates.
+        XCTAssertFalse(workflows.contains { $0.steps.contains { step in
+            if case .translate = step { return true } else { return false }
+        } })
     }
 
     func testTranslationPendingEngineThrowsOnAllOSes() async {

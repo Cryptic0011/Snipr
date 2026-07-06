@@ -25,29 +25,16 @@ extension Workflow {
     /// the UI.
     @MainActor
     static var builtIns: [Workflow] {
-        // Phase 4 ships two end-to-end working workflows plus the translate
-        // workflow flagged as `unsupported` until a real Translation
-        // framework integration replaces the placeholder engine. The
-        // unsupported workflow is intentionally still surfaced so users
-        // see the planned shape; selecting it surfaces an error from the
-        // executor rather than silently no-op'ing.
+        // Only end-to-end working workflows ship in the palette. The translate
+        // step (WorkflowStep.translate + PendingTranslationEngine) stays in
+        // the codebase for when Apple's Translation framework gets wired in,
+        // but a built-in that always errors is worse than its absence.
         [
             Workflow(
                 id: "snipr.workflow.capture-ocr-clipboard",
                 title: "Capture → OCR → Clipboard",
                 subtitle: "Capture a region, recognize text, copy result",
                 steps: [.capture, .ocr, .clipboard]
-            ),
-            Workflow(
-                id: "snipr.workflow.capture-ocr-translate-clipboard",
-                title: "Capture → OCR → Translate → Clipboard (preview)",
-                subtitle: "OCR + translate to system locale — pending Translation framework wiring",
-                steps: [
-                    .capture,
-                    .ocr,
-                    .translate(toLocale: Locale.current),
-                    .clipboard
-                ]
             ),
             Workflow(
                 id: "snipr.workflow.capture-pin",
