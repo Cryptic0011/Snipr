@@ -48,18 +48,22 @@ final class InputOverlayService {
         _ = AXIsProcessTrustedWithOptions(options)
     }
 
-    var isActive: Bool { keyMonitor != nil }
+    var isActive: Bool { keyMonitor != nil || clickMonitor != nil }
 
-    func start() {
+    /// Click ripples work without any permission; keystroke monitoring only
+    /// attaches when the app is Accessibility-trusted.
+    func start(keystrokes: Bool) {
         stop()
-        keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
-            let text = KeystrokeDisplay.text(
-                keyCode: event.keyCode,
-                modifiers: event.modifierFlags,
-                characters: event.charactersIgnoringModifiers
-            )
-            DispatchQueue.main.async { [weak self] in
-                self?.showKeystroke(text)
+        if keystrokes {
+            keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
+                let text = KeystrokeDisplay.text(
+                    keyCode: event.keyCode,
+                    modifiers: event.modifierFlags,
+                    characters: event.charactersIgnoringModifiers
+                )
+                DispatchQueue.main.async { [weak self] in
+                    self?.showKeystroke(text)
+                }
             }
         }
         clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in
