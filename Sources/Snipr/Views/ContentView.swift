@@ -1,5 +1,13 @@
 import SwiftUI
 
+/// Brand palette shared with the landing page: charcoal + brass, from the mark.
+private enum Brand {
+    static let brass = Color(red: 0.804, green: 0.667, blue: 0.329)      // #cdaa54
+    static let brassDeep = Color(red: 0.35, green: 0.27, blue: 0.12)
+    static let charcoal = Color(red: 0.149, green: 0.149, blue: 0.141)   // #262624
+    static let inkOnBrass = Color(red: 0.122, green: 0.118, blue: 0.102) // #1f1e1a
+}
+
 struct ContentView: View {
     let model: SniprAppModel
     @State private var selectedTab: DashboardTab = .overview
@@ -90,12 +98,12 @@ private enum DashboardTab: String, CaseIterable, Identifiable {
 private struct RaycastBackdrop: View {
     var body: some View {
         ZStack {
-            Color(red: 0.045, green: 0.045, blue: 0.052)
+            Brand.charcoal
 
             RadialGradient(
                 colors: [
-                    Color(red: 0.72, green: 0.04, blue: 0.28).opacity(0.54),
-                    Color(red: 0.22, green: 0.05, blue: 0.44).opacity(0.34),
+                    Brand.brass.opacity(0.16),
+                    Brand.brassDeep.opacity(0.14),
                     .clear
                 ],
                 center: .center,
@@ -108,7 +116,7 @@ private struct RaycastBackdrop: View {
                 colors: [
                     .black.opacity(0.56),
                     .clear,
-                    Color(red: 0.24, green: 0.05, blue: 0.06).opacity(0.22)
+                    Brand.brassDeep.opacity(0.16)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -394,7 +402,7 @@ private struct BottomStrip: View {
         .padding(.vertical, 11)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color(red: 0.105, green: 0.11, blue: 0.12).opacity(0.9))
+                .fill(Color(red: 0.125, green: 0.125, blue: 0.118).opacity(0.9))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.07)))
         )
     }
@@ -412,7 +420,7 @@ private struct GlassPanel<Content: View>: View {
                     .fill(Color.black.opacity(0.46))
                     .overlay(
                         LinearGradient(
-                            colors: [.white.opacity(0.06), Color(red: 0.4, green: 0.05, blue: 0.08).opacity(0.16)],
+                            colors: [.white.opacity(0.06), Brand.brass.opacity(0.08)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -468,12 +476,12 @@ private struct PrimaryRaycastButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(.white.opacity(configuration.isPressed ? 0.72 : 0.96))
+            .foregroundStyle(Brand.inkOnBrass.opacity(configuration.isPressed ? 0.72 : 1.0))
             .padding(.horizontal, 16)
             .padding(.vertical, 9)
             .background(
                 RoundedRectangle(cornerRadius: 7)
-                    .fill(Color(red: 0.36, green: 0.2, blue: 0.22).opacity(configuration.isPressed ? 0.75 : 1.0))
+                    .fill(Brand.brass.opacity(configuration.isPressed ? 0.78 : 1.0))
             )
     }
 }
@@ -484,15 +492,19 @@ private struct TabPillButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(.white.opacity(configuration.isPressed ? 0.64 : isSelected ? 0.96 : 0.56))
+            .foregroundStyle(
+                isSelected
+                    ? Brand.brass.opacity(configuration.isPressed ? 0.72 : 1.0)
+                    : .white.opacity(configuration.isPressed ? 0.64 : 0.56)
+            )
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 7)
-                    .fill(isSelected ? Color(red: 0.35, green: 0.17, blue: 0.2).opacity(0.96) : .white.opacity(0.055))
+                    .fill(isSelected ? Brand.brass.opacity(0.14) : .white.opacity(0.055))
                     .overlay(
                         RoundedRectangle(cornerRadius: 7)
-                            .stroke(isSelected ? Color(red: 1.0, green: 0.38, blue: 0.44).opacity(0.36) : .white.opacity(0.06))
+                            .stroke(isSelected ? Brand.brass.opacity(0.4) : .white.opacity(0.06))
                     )
             )
     }
