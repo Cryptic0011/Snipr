@@ -74,7 +74,7 @@ final class RecordingPresenter {
                 activeRecordingDisplayID = displayID
                 showRecordingRegionFrame(screen: screen, rect: rect)
                 showRecordingHUD()
-                startRecordingCompanions()
+                startRecordingCompanions(screen: screen, rect: rect)
             } catch {
                 onError?(error)
             }
@@ -115,7 +115,7 @@ final class RecordingPresenter {
     /// Keystroke/click overlays and the webcam bubble live exactly as long as
     /// the recording. The overlays need Accessibility access for global
     /// event monitors; ask once and skip quietly if the user declines.
-    private func startRecordingCompanions() {
+    private func startRecordingCompanions(screen: NSScreen, rect: CGRect) {
         guard let preferences else { return }
         if preferences.showInputOverlaysWhileRecording {
             if InputOverlayService.hasAccessibilityAccess {
@@ -126,7 +126,20 @@ final class RecordingPresenter {
             }
         }
         if preferences.showWebcamWhileRecording {
-            webcamBubble.show()
+            // The selection rect is top-left-origin display points; convert
+            // to global Cocoa coordinates (same math as the region frame) so
+            // the bubble starts *inside* the recorded area.
+            let regionInScreen = NSRect(
+                x: screen.frame.minX + rect.minX,
+                y: screen.frame.maxY - rect.maxY,
+                width: rect.width,
+                height: rect.height
+            )
+            webcamBubble.show(
+                in: regionInScreen,
+                diameter: preferences.webcamBubbleDiameter,
+                borderColor: preferences.webcamBubbleBorderColor
+            )
         }
     }
 

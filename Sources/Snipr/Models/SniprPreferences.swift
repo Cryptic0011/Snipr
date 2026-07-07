@@ -26,6 +26,8 @@ final class SniprPreferences {
         static let recordMicrophone = "recordMicrophone"
         static let showInputOverlaysWhileRecording = "showInputOverlaysWhileRecording"
         static let showWebcamWhileRecording = "showWebcamWhileRecording"
+        static let webcamBubbleDiameter = "webcamBubbleDiameter"
+        static let webcamBubbleBorderColor = "webcamBubbleBorderColor"
     }
 
     var showStackAfterCapture: Bool {
@@ -119,6 +121,16 @@ final class SniprPreferences {
         didSet { defaults.set(showWebcamWhileRecording, forKey: Keys.showWebcamWhileRecording) }
     }
 
+    /// Webcam bubble diameter in points.
+    var webcamBubbleDiameter: Double {
+        didSet { defaults.set(webcamBubbleDiameter, forKey: Keys.webcamBubbleDiameter) }
+    }
+
+    /// Webcam bubble border color preset.
+    var webcamBubbleBorderColor: WebcamBorderColor {
+        didSet { defaults.set(webcamBubbleBorderColor.rawValue, forKey: Keys.webcamBubbleBorderColor) }
+    }
+
     /// Phase 4: app-name → subfolder routing rules. Rules are evaluated in
     /// order; first match wins. Empty array means "no routing, captures land
     /// in the existing `Images/` root".
@@ -156,6 +168,10 @@ final class SniprPreferences {
         recordMicrophone = defaults.object(forKey: Keys.recordMicrophone) as? Bool ?? false
         showInputOverlaysWhileRecording = defaults.object(forKey: Keys.showInputOverlaysWhileRecording) as? Bool ?? false
         showWebcamWhileRecording = defaults.object(forKey: Keys.showWebcamWhileRecording) as? Bool ?? false
+        webcamBubbleDiameter = defaults.object(forKey: Keys.webcamBubbleDiameter) as? Double ?? 160
+        webcamBubbleBorderColor = WebcamBorderColor(
+            rawValue: defaults.string(forKey: Keys.webcamBubbleBorderColor) ?? ""
+        ) ?? .white
     }
 
     func resetStackDefaults() {

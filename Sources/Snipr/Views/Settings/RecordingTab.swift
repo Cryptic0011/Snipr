@@ -57,7 +57,38 @@ struct RecordingSettingsTab: View {
                     get: { model.preferences.showWebcamWhileRecording },
                     set: { model.preferences.showWebcamWhileRecording = $0 }
                 ))
-                Text("A draggable circular camera preview that records along with the screen.")
+
+                LabeledContent("Bubble size") {
+                    HStack(spacing: 10) {
+                        Slider(value: Binding(
+                            get: { model.preferences.webcamBubbleDiameter },
+                            set: { model.preferences.webcamBubbleDiameter = $0 }
+                        ), in: 100...260, step: 10)
+                        .frame(width: 180)
+                        Text("\(Int(model.preferences.webcamBubbleDiameter)) pt")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .frame(width: 48, alignment: .trailing)
+                    }
+                }
+                .disabled(!model.preferences.showWebcamWhileRecording)
+
+                LabeledContent("Bubble border") {
+                    Picker("Bubble border", selection: Binding(
+                        get: { model.preferences.webcamBubbleBorderColor },
+                        set: { model.preferences.webcamBubbleBorderColor = $0 }
+                    )) {
+                        ForEach(WebcamBorderColor.allCases) { color in
+                            Text(color.title).tag(color)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 120)
+                }
+                .disabled(!model.preferences.showWebcamWhileRecording)
+
+                Text("A draggable circular camera preview that records along with the screen. It starts inside the recorded area.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
