@@ -67,8 +67,7 @@ function heroIntro() {
     )
     // shutter
     .fromTo("#flash", { autoAlpha: 0 }, { autoAlpha: 0.5, duration: 0.07, ease: "none" }, "+=0.15")
-    .to("#flash", { autoAlpha: 0, duration: 0.25, ease: "power1.out" })
-    .from(".stack-badge", { scale: 0, ease: "back.out(2)", duration: 0.35 }, "-=0.2");
+    .to("#flash", { autoAlpha: 0, duration: 0.25, ease: "power1.out" });
 }
 
 function scrollReveals() {

@@ -9,7 +9,7 @@
   <meta property="og:description" content="Area, window, and scrolling screenshots, screen recording, OCR, and annotation. Keyboard-first. Nothing leaves your Mac.">
   <meta property="og:image" content="https://cryptic0011.github.io/Snipr/og.png">
   <meta property="og:type" content="website">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cg fill='none' stroke='%23cdaa54' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='16' cy='16' r='8'/%3E%3Cpath d='M16 2v7M16 23v7M2 16h7M23 16h7'/%3E%3C/g%3E%3C/svg%3E">
+  <link rel="icon" type="image/png" href="logo-mark.png">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -18,12 +18,7 @@
 
 <header class="nav">
   <a class="nav-brand" href="#top" aria-label="Snipr home">
-    <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
-      <g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
-        <circle cx="16" cy="16" r="8"/>
-        <path d="M16 2v7M16 23v7M2 16h7M23 16h7"/>
-      </g>
-    </svg>
+    <img class="mark" src="logo-mark.png" alt="">
     <span>Snipr</span>
   </a>
   <nav class="nav-links" aria-label="Site">
@@ -78,32 +73,10 @@
       </dl>
     </div>
 
-    <!-- product mock: dimmed display, live selection, the stack -->
-    <div class="hero-mock hero-el" aria-hidden="true">
-      <div class="mock">
-        <div class="mock-bar"><i></i><i></i><i></i></div>
-        <div class="mock-screen">
-          <div class="mock-dim"></div>
-          <div class="mock-sel">
-            <div class="mock-win">
-              <div class="mw-bar"></div>
-              <div class="mw-line w80"></div>
-              <div class="mw-line w60"></div>
-              <div class="mw-line w70"></div>
-              <div class="mw-block"></div>
-            </div>
-            <i class="h h-tl"></i><i class="h h-tr"></i><i class="h h-bl"></i><i class="h h-br"></i>
-            <span class="mock-hud">1128 × 706 · PNG</span>
-          </div>
-          <div class="mock-stack">
-            <div class="thumb t3"></div>
-            <div class="thumb t2"></div>
-            <div class="thumb t1"></div>
-            <span class="stack-badge">6</span>
-          </div>
-        </div>
-      </div>
-      <p class="mock-caption">Captures pile up in the Stack — drag them out when you're ready.</p>
+    <div class="hero-mock hero-el">
+      <img class="shot-frame" src="dashboard.png" width="780" height="572"
+        alt="The Snipr dashboard: quick capture actions on the left, recent captures on the right.">
+      <p class="mock-caption">The dashboard — quick actions, recent captures, one hotkey away.</p>
     </div>
   </section>
 
@@ -173,12 +146,7 @@
   <!-- ============ DOWNLOAD ============ -->
   <section class="section cta" id="download">
     <div data-reveal>
-      <svg class="mark mark-lg" viewBox="0 0 32 32" aria-hidden="true">
-        <g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
-          <circle cx="16" cy="16" r="8"/>
-          <path d="M16 2v7M16 23v7M2 16h7M23 16h7"/>
-        </g>
-      </svg>
+      <img class="mark mark-lg" src="logo-mark.png" alt="">
       <h2>Put it in your menu bar</h2>
       <p class="cta-sub">Free. Apple-notarized. Auto-updates. <span id="version-label" class="mono"></span></p>
       <a class="btn btn-gold btn-lg" id="download-btn-2" href="https://github.com/Cryptic0011/Snipr/releases/latest">
@@ -193,12 +161,7 @@
 
 <footer class="footer">
   <div class="foot-brand">
-    <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
-      <g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
-        <circle cx="16" cy="16" r="8"/>
-        <path d="M16 2v7M16 23v7M2 16h7M23 16h7"/>
-      </g>
-    </svg>
+    <img class="mark" src="logo-mark.png" alt="">
     <span>Snipr</span>
   </div>
   <nav class="foot-links" aria-label="Footer">
