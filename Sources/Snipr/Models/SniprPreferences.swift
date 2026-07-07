@@ -24,7 +24,9 @@ final class SniprPreferences {
         static let freezeScreenDuringSelection = "freezeScreenDuringSelection"
         static let recordingFormat = "recordingFormat"
         static let recordMicrophone = "recordMicrophone"
-        static let showInputOverlaysWhileRecording = "showInputOverlaysWhileRecording"
+        static let showInputOverlaysWhileRecording = "showInputOverlaysWhileRecording" // legacy combined toggle
+        static let showKeystrokesWhileRecording = "showKeystrokesWhileRecording"
+        static let showClicksWhileRecording = "showClicksWhileRecording"
         static let showWebcamWhileRecording = "showWebcamWhileRecording"
         static let webcamBubbleDiameter = "webcamBubbleDiameter"
         static let webcamBubbleBorderColor = "webcamBubbleBorderColor"
@@ -111,9 +113,14 @@ final class SniprPreferences {
         didSet { defaults.set(recordMicrophone, forKey: Keys.recordMicrophone) }
     }
 
-    /// Show pressed keys and click ripples on screen while recording.
-    var showInputOverlaysWhileRecording: Bool {
-        didSet { defaults.set(showInputOverlaysWhileRecording, forKey: Keys.showInputOverlaysWhileRecording) }
+    /// Show pressed keys on screen while recording (needs Input Monitoring).
+    var showKeystrokesWhileRecording: Bool {
+        didSet { defaults.set(showKeystrokesWhileRecording, forKey: Keys.showKeystrokesWhileRecording) }
+    }
+
+    /// Show click ripples on screen while recording.
+    var showClicksWhileRecording: Bool {
+        didSet { defaults.set(showClicksWhileRecording, forKey: Keys.showClicksWhileRecording) }
     }
 
     /// Float a circular webcam bubble on screen while recording.
@@ -166,7 +173,10 @@ final class SniprPreferences {
             rawValue: defaults.string(forKey: Keys.recordingFormat) ?? ""
         ) ?? .mov
         recordMicrophone = defaults.object(forKey: Keys.recordMicrophone) as? Bool ?? false
-        showInputOverlaysWhileRecording = defaults.object(forKey: Keys.showInputOverlaysWhileRecording) as? Bool ?? false
+        // Migration: the combined "keystrokes and clicks" toggle seeds both.
+        let legacyInputOverlays = defaults.object(forKey: Keys.showInputOverlaysWhileRecording) as? Bool ?? false
+        showKeystrokesWhileRecording = defaults.object(forKey: Keys.showKeystrokesWhileRecording) as? Bool ?? legacyInputOverlays
+        showClicksWhileRecording = defaults.object(forKey: Keys.showClicksWhileRecording) as? Bool ?? legacyInputOverlays
         showWebcamWhileRecording = defaults.object(forKey: Keys.showWebcamWhileRecording) as? Bool ?? false
         webcamBubbleDiameter = defaults.object(forKey: Keys.webcamBubbleDiameter) as? Double ?? 160
         webcamBubbleBorderColor = WebcamBorderColor(

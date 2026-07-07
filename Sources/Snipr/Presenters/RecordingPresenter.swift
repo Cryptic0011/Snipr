@@ -117,26 +117,31 @@ final class RecordingPresenter {
     /// event monitors; ask once and skip quietly if the user declines.
     private func startRecordingCompanions(screen: NSScreen, rect: CGRect) {
         guard let preferences else { return }
-        if preferences.showInputOverlaysWhileRecording {
+        // The selection rect is top-left-origin display points; convert to
+        // global Cocoa coordinates (same math as the region frame) so the
+        // companions land *inside* the recorded area.
+        let regionInScreen = NSRect(
+            x: screen.frame.minX + rect.minX,
+            y: screen.frame.maxY - rect.maxY,
+            width: rect.width,
+            height: rect.height
+        )
+
+        if preferences.showKeystrokesWhileRecording || preferences.showClicksWhileRecording {
             let trusted = InputOverlayService.hasInputMonitoringAccess
-            // Click ripples never need permission — always start them.
-            // Keystrokes need Input Monitoring; prompt once and carry on.
-            inputOverlays.start(keystrokes: trusted)
-            if !trusted {
+            // Click ripples never need permission; keystrokes need Input
+            // Monitoring — prompt once and carry on without them.
+            inputOverlays.start(
+                keystrokes: preferences.showKeystrokesWhileRecording && trusted,
+                clicks: preferences.showClicksWhileRecording,
+                region: regionInScreen
+            )
+            if preferences.showKeystrokesWhileRecording, !trusted {
                 InputOverlayService.requestInputMonitoringAccess()
                 ToastPresenter.show("Grant Input Monitoring, then relaunch Snipr for keystroke overlays", systemImage: "exclamationmark.triangle")
             }
         }
         if preferences.showWebcamWhileRecording {
-            // The selection rect is top-left-origin display points; convert
-            // to global Cocoa coordinates (same math as the region frame) so
-            // the bubble starts *inside* the recorded area.
-            let regionInScreen = NSRect(
-                x: screen.frame.minX + rect.minX,
-                y: screen.frame.maxY - rect.maxY,
-                width: rect.width,
-                height: rect.height
-            )
             webcamBubble.show(
                 in: regionInScreen,
                 diameter: preferences.webcamBubbleDiameter,

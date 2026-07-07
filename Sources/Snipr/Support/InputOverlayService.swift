@@ -38,6 +38,9 @@ final class InputOverlayService {
     private var clickMonitor: Any?
     private var hudPanel: NSPanel?
     private var hudDismissTask: Task<Void, Never>?
+    /// Recorded area in global Cocoa coordinates; the keystroke HUD is
+    /// positioned inside it so it actually lands in the recording.
+    private var region: CGRect?
 
     /// Global keyDown monitors are gated by Input Monitoring (ListenEvent),
     /// not Accessibility — AXIsProcessTrusted is the wrong check for them.
@@ -50,9 +53,10 @@ final class InputOverlayService {
     var isActive: Bool { keyMonitor != nil || clickMonitor != nil }
 
     /// Click ripples work without any permission; keystroke monitoring only
-    /// attaches when the app is Accessibility-trusted.
-    func start(keystrokes: Bool) {
+    /// attaches when the app has Input Monitoring access.
+    func start(keystrokes: Bool, clicks: Bool, region: CGRect? = nil) {
         stop()
+        self.region = region
         if keystrokes {
             keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
                 let text = KeystrokeDisplay.text(
@@ -65,10 +69,12 @@ final class InputOverlayService {
                 }
             }
         }
-        clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in
-            let location = NSEvent.mouseLocation
-            DispatchQueue.main.async { [weak self] in
-                self?.showClickRipple(at: location)
+        if clicks {
+            clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in
+                let location = NSEvent.mouseLocation
+                DispatchQueue.main.async { [weak self] in
+                    self?.showClickRipple(at: location)
+                }
             }
         }
     }
@@ -78,6 +84,7 @@ final class InputOverlayService {
         if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
         keyMonitor = nil
         clickMonitor = nil
+        region = nil
         hudDismissTask?.cancel()
         hudPanel?.close()
         hudPanel = nil
@@ -113,9 +120,10 @@ final class InputOverlayService {
         panel.hasShadow = false
         panel.ignoresMouseEvents = true
         panel.contentView = hosting
+        let anchor = region ?? screen.visibleFrame
         panel.setFrameOrigin(NSPoint(
-            x: screen.visibleFrame.midX - hosting.fittingSize.width / 2,
-            y: screen.visibleFrame.minY + 80
+            x: anchor.midX - hosting.fittingSize.width / 2,
+            y: anchor.minY + min(40, max(8, anchor.height * 0.06))
         ))
         panel.orderFrontRegardless()
         hudPanel = panel

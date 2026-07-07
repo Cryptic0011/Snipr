@@ -45,13 +45,18 @@ struct RecordingSettingsTab: View {
             }
 
             Section("While recording") {
-                Toggle("Show keystrokes and clicks", isOn: Binding(
-                    get: { model.preferences.showInputOverlaysWhileRecording },
-                    set: { model.preferences.showInputOverlaysWhileRecording = $0 }
+                Toggle("Show keystrokes", isOn: Binding(
+                    get: { model.preferences.showKeystrokesWhileRecording },
+                    set: { model.preferences.showKeystrokesWhileRecording = $0 }
                 ))
-                Text("Pressed keys and click ripples appear on screen and are captured in the recording. Keystrokes require Input Monitoring access (System Settings → Privacy & Security).")
+                Text("Pressed keys appear near the bottom of the recorded area. Requires Input Monitoring access (System Settings → Privacy & Security).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                Toggle("Show click ripples", isOn: Binding(
+                    get: { model.preferences.showClicksWhileRecording },
+                    set: { model.preferences.showClicksWhileRecording = $0 }
+                ))
 
                 Toggle("Show webcam bubble", isOn: Binding(
                     get: { model.preferences.showWebcamWhileRecording },
