@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Snipr — precision screen capture for macOS</title>
+  <meta name="description" content="Snipr is a keyboard-first menu-bar capture tool for the Mac: area, window, and scrolling screenshots, screen recording, OCR, and annotation. Everything stays on your machine.">
+  <meta property="og:title" content="Snipr — precision screen capture for macOS">
+  <meta property="og:description" content="Area, window, and scrolling screenshots, screen recording, OCR, and annotation. Keyboard-first. Nothing leaves your Mac.">
+  <meta property="og:image" content="https://cryptic0011.github.io/Snipr/og.png">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cg fill='none' stroke='%23cdaa54' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='16' cy='16' r='8'/%3E%3Cpath d='M16 2v7M16 23v7M2 16h7M23 16h7'/%3E%3C/g%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="flash" aria-hidden="true"></div>
+
+<header class="nav">
+  <a class="nav-brand" href="#top" aria-label="Snipr home">
+    <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+      <g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+        <circle cx="16" cy="16" r="8"/>
+        <path d="M16 2v7M16 23v7M2 16h7M23 16h7"/>
+      </g>
+    </svg>
+    <span>Snipr</span>
+  </a>
+  <nav class="nav-links" aria-label="Site">
+    <a href="#features">Features</a>
+    <a href="#privacy">Privacy</a>
+    <a href="https://github.com/Cryptic0011/Snipr" target="_blank" rel="noreferrer noopener">GitHub</a>
+  </nav>
+  <a class="btn btn-gold nav-cta" href="#download">Download</a>
+</header>
+
+<main id="top">
+
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow hero-el"><span class="tick" aria-hidden="true"></span>Precision screen capture for macOS</p>
+
+      <h1 class="hero-el">
+        Take
+        <span class="shot-wrap">
+          <span id="shot">the&nbsp;shot.</span>
+          <span class="sel-box" id="selbox" aria-hidden="true">
+            <i class="h h-tl"></i><i class="h h-tc"></i><i class="h h-tr"></i>
+            <i class="h h-ml"></i><i class="h h-mr"></i>
+            <i class="h h-bl"></i><i class="h h-bc"></i><i class="h h-br"></i>
+            <span class="sel-dims" id="seldims">0 × 0</span>
+          </span>
+        </span>
+      </h1>
+
+      <p class="sub hero-el">
+        Snipr is a keyboard-first capture tool that lives in your menu bar.
+        Area, window, and scrolling screenshots, screen recordings, OCR, and
+        annotation — and none of it ever leaves your Mac.
+      </p>
+
+      <div class="hero-actions hero-el">
+        <a class="btn btn-gold btn-lg" id="download-btn" href="https://github.com/Cryptic0011/Snipr/releases/latest">
+          <svg viewBox="0 0 16 16" class="ico" aria-hidden="true"><path fill="currentColor" d="M8 1v8.6L4.7 6.3l-1 1L8 11.6l4.3-4.3-1-1L8 9.6V1H8zM2 13h12v1.5H2z"/></svg>
+          Download for Mac
+        </a>
+        <a class="link-quiet" href="https://github.com/Cryptic0011/Snipr" target="_blank" rel="noreferrer noopener">
+          Read the source →
+        </a>
+      </div>
+
+      <dl class="meta hero-el">
+        <div><dt>Price</dt><dd>Free</dd></div>
+        <div><dt>Account</dt><dd>None</dd></div>
+        <div><dt>Cloud</dt><dd>Never</dd></div>
+        <div><dt>Requires</dt><dd>macOS 14+</dd></div>
+      </dl>
+    </div>
+
+    <!-- product mock: dimmed display, live selection, the stack -->
+    <div class="hero-mock hero-el" aria-hidden="true">
+      <div class="mock">
+        <div class="mock-bar"><i></i><i></i><i></i></div>
+        <div class="mock-screen">
+          <div class="mock-dim"></div>
+          <div class="mock-sel">
+            <div class="mock-win">
+              <div class="mw-bar"></div>
+              <div class="mw-line w80"></div>
+              <div class="mw-line w60"></div>
+              <div class="mw-line w70"></div>
+              <div class="mw-block"></div>
+            </div>
+            <i class="h h-tl"></i><i class="h h-tr"></i><i class="h h-bl"></i><i class="h h-br"></i>
+            <span class="mock-hud">1128 × 706 · PNG</span>
+          </div>
+          <div class="mock-stack">
+            <div class="thumb t3"></div>
+            <div class="thumb t2"></div>
+            <div class="thumb t1"></div>
+            <span class="stack-badge">6</span>
+          </div>
+        </div>
+      </div>
+      <p class="mock-caption">Captures pile up in the Stack — drag them out when you're ready.</p>
+    </div>
+  </section>
+
+  <!-- ============ FEATURES ============ -->
+  <section class="section" id="features">
+    <div class="section-head" data-reveal>
+      <h2>Everything between “grab that” and “done”</h2>
+      <p>One tool for the whole loop: capture, mark up, extract, ship.</p>
+    </div>
+
+    <div class="grid" data-reveal-group>
+      <article class="card">
+        <kbd>⌘⇧4</kbd>
+        <h3>Area capture</h3>
+        <p>Drag with an 8× loupe, live pixel coordinates, and window-edge snapping. Or press <span class="mono">T</span> and type exact dimensions.</p>
+      </article>
+      <article class="card">
+        <kbd>⌘⇧5</kbd>
+        <h3>Window &amp; full screen</h3>
+        <p>Pick a window Screenshot-app style or grab the whole display — always at native Retina resolution.</p>
+      </article>
+      <article class="card">
+        <kbd class="kbd-soft">scroll</kbd>
+        <h3>Scrolling capture</h3>
+        <p>Scroll through a long page while Snipr stitches the frames into one seamless, tall image.</p>
+      </article>
+      <article class="card">
+        <kbd>⌘⇧6</kbd>
+        <h3>Screen recording</h3>
+        <p>Region recordings as .mov with system audio, a live HUD, and a trim pass before you save.</p>
+      </article>
+      <article class="card">
+        <kbd>⌘⇧O</kbd>
+        <h3>OCR to clipboard</h3>
+        <p>Point at pixels, get text. Vision-powered recognition lands straight on your clipboard — no popup, just a haptic.</p>
+      </article>
+      <article class="card">
+        <kbd class="kbd-soft">edit</kbd>
+        <h3>Annotate &amp; ship</h3>
+        <p>Arrows, shapes, highlight, blur, pixelate, step badges, text — with undo/redo and crop. Then drag it anywhere.</p>
+      </article>
+    </div>
+
+    <ul class="more" data-reveal>
+      <li>The Stack</li>
+      <li>Pinned captures</li>
+      <li><span class="mono">⌘⇧C</span> color picker</li>
+      <li><span class="mono">⌘⇧Space</span> command palette</li>
+      <li>Filename templates</li>
+      <li>Smart folders</li>
+      <li>Workflows</li>
+      <li>Combine to PDF</li>
+    </ul>
+  </section>
+
+  <!-- ============ PRIVACY ============ -->
+  <section class="section privacy" id="privacy">
+    <div class="privacy-inner" data-reveal>
+      <h2>Nothing leaves this Mac</h2>
+      <div class="privacy-cols">
+        <p><strong>No cloud.</strong> Captures save to a folder you choose. Sharing goes through the macOS share sheet, on your terms.</p>
+        <p><strong>No account, no telemetry.</strong> There is nothing to sign into and nothing phoning home.</p>
+        <p><strong>Signed and notarized.</strong> Built by a known Apple developer, checked by Apple, updated over Sparkle against a public key.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DOWNLOAD ============ -->
+  <section class="section cta" id="download">
+    <div data-reveal>
+      <svg class="mark mark-lg" viewBox="0 0 32 32" aria-hidden="true">
+        <g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+          <circle cx="16" cy="16" r="8"/>
+          <path d="M16 2v7M16 23v7M2 16h7M23 16h7"/>
+        </g>
+      </svg>
+      <h2>Put it in your menu bar</h2>
+      <p class="cta-sub">Free. Apple-notarized. Auto-updates. <span id="version-label" class="mono"></span></p>
+      <a class="btn btn-gold btn-lg" id="download-btn-2" href="https://github.com/Cryptic0011/Snipr/releases/latest">
+        <svg viewBox="0 0 16 16" class="ico" aria-hidden="true"><path fill="currentColor" d="M8 1v8.6L4.7 6.3l-1 1L8 11.6l4.3-4.3-1-1L8 9.6V1H8zM2 13h12v1.5H2z"/></svg>
+        Download Snipr
+      </a>
+      <p class="fine">macOS 14 or later · Apple Silicon</p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="foot-brand">
+    <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+      <g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+        <circle cx="16" cy="16" r="8"/>
+        <path d="M16 2v7M16 23v7M2 16h7M23 16h7"/>
+      </g>
+    </svg>
+    <span>Snipr — made by Grayson Patterson</span>
+  </div>
+  <nav class="foot-links" aria-label="Footer">
+    <a href="https://github.com/Cryptic0011/Snipr" target="_blank" rel="noreferrer noopener">GitHub</a>
+    <a href="https://github.com/Cryptic0011/Snipr/issues" target="_blank" rel="noreferrer noopener">Report an issue</a>
+    <a href="https://github.com/Cryptic0011/Snipr/releases" target="_blank" rel="noreferrer noopener">Release notes</a>
+  </nav>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
