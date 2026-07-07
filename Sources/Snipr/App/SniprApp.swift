@@ -73,7 +73,7 @@ final class SniprAppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 780, height: 480),
+            contentRect: NSRect(x: 0, y: 0, width: 780, height: 540),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -82,10 +82,10 @@ final class SniprAppDelegate: NSObject, NSApplicationDelegate {
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.isReleasedWhenClosed = false
-        window.contentMinSize = NSSize(width: 780, height: 480)
+        window.contentMinSize = NSSize(width: 780, height: 540)
         window.contentView = NSHostingView(
             rootView: ContentView(model: model)
-                .frame(minWidth: 780, minHeight: 480)
+                .frame(minWidth: 780, minHeight: 540)
                 .preferredColorScheme(.dark)
         )
         SniprDiagnostics.disableRestoration(for: window)
