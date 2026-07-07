@@ -20,6 +20,12 @@ final class SniprPreferences {
         static let colorOutputFormat = "colorOutputFormat"
         static let recordSystemAudio = "recordSystemAudio"
         static let smartFolderRules = "smartFolderRules"
+        static let captureDelaySeconds = "captureDelaySeconds"
+        static let freezeScreenDuringSelection = "freezeScreenDuringSelection"
+        static let recordingFormat = "recordingFormat"
+        static let recordMicrophone = "recordMicrophone"
+        static let showInputOverlaysWhileRecording = "showInputOverlaysWhileRecording"
+        static let showWebcamWhileRecording = "showWebcamWhileRecording"
     }
 
     var showStackAfterCapture: Bool {
@@ -81,6 +87,38 @@ final class SniprPreferences {
         didSet { defaults.set(recordSystemAudio, forKey: Keys.recordSystemAudio) }
     }
 
+    /// Self-timer: seconds between committing a selection and the shot. 0 = off.
+    var captureDelaySeconds: Int {
+        didSet { defaults.set(captureDelaySeconds, forKey: Keys.captureDelaySeconds) }
+    }
+
+    /// Draw a still of the display behind the selection overlay so on-screen
+    /// motion doesn't shift under the crosshair mid-drag.
+    var freezeScreenDuringSelection: Bool {
+        didSet { defaults.set(freezeScreenDuringSelection, forKey: Keys.freezeScreenDuringSelection) }
+    }
+
+    /// Container recordings are written into (.mov or .mp4).
+    var recordingFormat: RecordingFileFormat {
+        didSet { defaults.set(recordingFormat.rawValue, forKey: Keys.recordingFormat) }
+    }
+
+    /// Include the microphone in recordings. Only effective on macOS 15+,
+    /// where ScreenCaptureKit exposes mic capture.
+    var recordMicrophone: Bool {
+        didSet { defaults.set(recordMicrophone, forKey: Keys.recordMicrophone) }
+    }
+
+    /// Show pressed keys and click ripples on screen while recording.
+    var showInputOverlaysWhileRecording: Bool {
+        didSet { defaults.set(showInputOverlaysWhileRecording, forKey: Keys.showInputOverlaysWhileRecording) }
+    }
+
+    /// Float a circular webcam bubble on screen while recording.
+    var showWebcamWhileRecording: Bool {
+        didSet { defaults.set(showWebcamWhileRecording, forKey: Keys.showWebcamWhileRecording) }
+    }
+
     /// Phase 4: app-name → subfolder routing rules. Rules are evaluated in
     /// order; first match wins. Empty array means "no routing, captures land
     /// in the existing `Images/` root".
@@ -110,6 +148,14 @@ final class SniprPreferences {
         ) ?? .hex
         recordSystemAudio = defaults.object(forKey: Keys.recordSystemAudio) as? Bool ?? false
         smartFolderRules = Self.loadSmartFolderRules(from: defaults)
+        captureDelaySeconds = defaults.object(forKey: Keys.captureDelaySeconds) as? Int ?? 0
+        freezeScreenDuringSelection = defaults.object(forKey: Keys.freezeScreenDuringSelection) as? Bool ?? false
+        recordingFormat = RecordingFileFormat(
+            rawValue: defaults.string(forKey: Keys.recordingFormat) ?? ""
+        ) ?? .mov
+        recordMicrophone = defaults.object(forKey: Keys.recordMicrophone) as? Bool ?? false
+        showInputOverlaysWhileRecording = defaults.object(forKey: Keys.showInputOverlaysWhileRecording) as? Bool ?? false
+        showWebcamWhileRecording = defaults.object(forKey: Keys.showWebcamWhileRecording) as? Bool ?? false
     }
 
     func resetStackDefaults() {

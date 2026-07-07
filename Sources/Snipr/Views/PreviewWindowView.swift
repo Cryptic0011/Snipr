@@ -16,6 +16,8 @@ struct PreviewWindowView: View {
     /// Existing text annotation being re-edited via double-click, if any.
     @State private var editingTextID: UUID?
     @State private var selection: UUID?
+    /// Share-ready backdrop applied at copy/save time; nil = plain export.
+    @State private var beautifyStyle: BeautifyStyle?
     // Snapshot-based undo: every mutation pushes the whole layer array.
     // Annotation stacks are tiny, so this stays cheap and makes add, move,
     // delete, edit, and clear all undoable through one mechanism.
@@ -59,7 +61,13 @@ struct PreviewWindowView: View {
                         }
                     )
                     .frame(width: proxy.size.width, height: proxy.size.height)
-                    .background(Color.black.opacity(0.88))
+                    .background {
+                        if let beautifyStyle {
+                            beautifyStyle.previewGradient
+                        } else {
+                            Color.black.opacity(0.88)
+                        }
+                    }
                 } else {
                     ContentUnavailableView("Image Missing", systemImage: "photo.badge.exclamationmark")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -147,6 +155,21 @@ struct PreviewWindowView: View {
             Slider(value: $lineWidth, in: 2...12, step: 1)
                 .frame(width: 82)
                 .help("Line width")
+
+            Menu {
+                Picker("Background", selection: $beautifyStyle) {
+                    Text("None").tag(BeautifyStyle?.none)
+                    ForEach(BeautifyStyle.allCases) { style in
+                        Text(style.title).tag(BeautifyStyle?.some(style))
+                    }
+                }
+            } label: {
+                Image(systemName: beautifyStyle == nil ? "rectangle.dashed" : "rectangle.inset.filled")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("Background: pad the export with a gradient backdrop")
+            .accessibilityLabel("Background style")
 
             Spacer()
 
@@ -311,8 +334,21 @@ struct PreviewWindowView: View {
         self.selection = nil
     }
 
+    /// Annotations rendered, then the optional beautify backdrop applied.
+    private func exportImage() -> NSImage? {
+        guard let rendered = AnnotationRenderer.renderImage(baseURL: item.fileURL, annotations: annotations) else {
+            return nil
+        }
+        guard let beautifyStyle,
+              let cgImage = rendered.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let framed = BeautifyRenderer.render(image: cgImage, style: beautifyStyle) else {
+            return rendered
+        }
+        return NSImage(cgImage: framed, size: NSSize(width: framed.width, height: framed.height))
+    }
+
     private func copyAnnotatedImage() {
-        guard let image = AnnotationRenderer.renderImage(baseURL: item.fileURL, annotations: annotations) else {
+        guard let image = exportImage() else {
             return
         }
 
@@ -320,7 +356,10 @@ struct PreviewWindowView: View {
     }
 
     private func saveAnnotatedImage() {
-        guard let data = AnnotationRenderer.pngData(baseURL: item.fileURL, annotations: annotations) else {
+        guard let image = exportImage(),
+              let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let data = rep.representation(using: .png, properties: [:]) else {
             return
         }
 

@@ -15,6 +15,8 @@ final class RecordingPresenter {
     private var recordingHUDPanel: NSPanel?
     private var recordingRegionFramePanel: NSPanel?
     private var activeRecordingDisplayID: CGDirectDisplayID?
+    private let inputOverlays = InputOverlayService()
+    private let webcamBubble = WebcamBubblePresenter()
 
     /// Called when a new recording lands in the capture store so the
     /// coordinator can reveal the stack.
@@ -56,18 +58,23 @@ final class RecordingPresenter {
             try? await Task.sleep(nanoseconds: 120_000_000)
 
             do {
-                let destinationURL = try captureStore.nextRecordingURL()
-                let resolvedSystemAudio = preferences?.recordSystemAudio ?? false
+                let format = preferences?.recordingFormat ?? .mov
+                let destinationURL = try captureStore.nextRecordingURL(fileExtension: format.fileExtension)
                 try await recordingEngine.start(
                     displayID: displayID,
                     rectInDisplayPoints: rect,
                     screen: screen,
                     destinationURL: destinationURL,
-                    options: RecordingOptions(capturesSystemAudio: resolvedSystemAudio)
+                    options: RecordingOptions(
+                        capturesSystemAudio: preferences?.recordSystemAudio ?? false,
+                        capturesMicrophone: preferences?.recordMicrophone ?? false,
+                        fileFormat: format
+                    )
                 )
                 activeRecordingDisplayID = displayID
                 showRecordingRegionFrame(screen: screen, rect: rect)
                 showRecordingHUD()
+                startRecordingCompanions()
             } catch {
                 onError?(error)
             }
@@ -103,6 +110,29 @@ final class RecordingPresenter {
         recordingEngine.cancel()
         activeRecordingDisplayID = nil
         closeRecordingHUD()
+    }
+
+    /// Keystroke/click overlays and the webcam bubble live exactly as long as
+    /// the recording. The overlays need Accessibility access for global
+    /// event monitors; ask once and skip quietly if the user declines.
+    private func startRecordingCompanions() {
+        guard let preferences else { return }
+        if preferences.showInputOverlaysWhileRecording {
+            if InputOverlayService.hasAccessibilityAccess {
+                inputOverlays.start()
+            } else {
+                InputOverlayService.requestAccessibilityAccess()
+                ToastPresenter.show("Grant Accessibility access for keystroke overlays", systemImage: "exclamationmark.triangle")
+            }
+        }
+        if preferences.showWebcamWhileRecording {
+            webcamBubble.show()
+        }
+    }
+
+    private func stopRecordingCompanions() {
+        inputOverlays.stop()
+        webcamBubble.hide()
     }
 
     private func showRecordingRegionFrame(screen: NSScreen, rect: CGRect) {
@@ -180,6 +210,7 @@ final class RecordingPresenter {
     private func closeRecordingHUD() {
         closeRecordingHUDPanelOnly()
         closeRecordingRegionFrame()
+        stopRecordingCompanions()
     }
 
     private func closeRecordingHUDPanelOnly() {

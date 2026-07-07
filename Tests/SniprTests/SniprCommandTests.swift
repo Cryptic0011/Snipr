@@ -6,7 +6,7 @@ final class SniprCommandTests: XCTestCase {
     func testAllCommandsMatchMVPOrder() {
         XCTAssertEqual(
             SniprCommand.all.map(\.id),
-            [.captureToolbar, .captureArea, .recordArea, .ocrSelection, .showOCRHistory, .pickColor, .scrollingCapture, .openHistory, .clearStack, .openSettings, .quit]
+            [.captureToolbar, .captureArea, .recordArea, .ocrSelection, .showOCRHistory, .pickColor, .scanQR, .toggleDesktopIcons, .scrollingCapture, .openHistory, .clearStack, .openSettings, .quit]
         )
     }
 

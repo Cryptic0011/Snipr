@@ -12,6 +12,8 @@ enum SniprCommandID: String, CaseIterable, Codable, Sendable {
     case showOCRHistory
     case pickColor
     case scrollingCapture
+    case scanQR
+    case toggleDesktopIcons
 
     /// The hotkey action whose user-configured binding supplies this
     /// command's shortcut hint. Commands without one show a fixed system
@@ -26,7 +28,7 @@ enum SniprCommandID: String, CaseIterable, Codable, Sendable {
         case .ocrSelection: .ocr
         case .pickColor: .colorPick
         case .scrollingCapture: .scrollingCapture
-        case .openSettings, .quit, .showOCRHistory: nil
+        case .openSettings, .quit, .showOCRHistory, .scanQR, .toggleDesktopIcons: nil
         }
     }
 }
@@ -93,6 +95,20 @@ struct SniprCommand: Identifiable, Equatable, Sendable {
             subtitle: "Sample a pixel color and copy it",
             systemImage: "eyedropper",
             shortcut: "⌘⇧C"
+        ),
+        .init(
+            id: .scanQR,
+            title: "Scan QR Code",
+            subtitle: "Read a QR code in a region — copies the payload",
+            systemImage: "qrcode.viewfinder",
+            shortcut: ""
+        ),
+        .init(
+            id: .toggleDesktopIcons,
+            title: "Toggle Desktop Icons",
+            subtitle: "Hide or show desktop icons behind a wallpaper cover",
+            systemImage: "eye.slash",
+            shortcut: ""
         ),
         .init(
             id: .scrollingCapture,

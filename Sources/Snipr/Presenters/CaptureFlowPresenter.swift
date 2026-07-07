@@ -85,9 +85,19 @@ final class CaptureFlowPresenter {
         windowTitle: String? = nil,
         appName: String? = nil
     ) {
+        let delay = preferences.captureDelaySeconds
         // Tiny delay so the overlay window finishes tearing down before we
         // ask SCK for pixels — without it the overlay would land in the shot.
         Task { @MainActor [weak self] in
+            if delay > 0 {
+                // Self-timer: countdown toasts, then shoot. The toast panel
+                // is excluded from captures via sharingType.
+                for remaining in stride(from: delay, through: 1, by: -1) {
+                    ToastPresenter.show("Capturing in \(remaining)…", systemImage: "timer")
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                }
+                ToastPresenter.dismiss()
+            }
             try? await Task.sleep(nanoseconds: 120_000_000)
             await self?.storeCapture(
                 displayID: displayID,
@@ -96,6 +106,28 @@ final class CaptureFlowPresenter {
                 windowTitle: windowTitle,
                 appName: appName
             )
+        }
+    }
+
+    /// Capture pixels for the selected region and read any barcode in them —
+    /// payload goes to the clipboard, mirroring the OCR flow.
+    func runQRScan(displayID: CGDirectDisplayID, screen: NSScreen, rect: CGRect) {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            guard let self else { return }
+            do {
+                let captured = try await self.captureEngine.capture(
+                    displayID: displayID,
+                    rectInDisplayPoints: rect,
+                    screen: screen
+                )
+                let payload = try QRCodeScanner.payload(in: captured.cgImage)
+                ClipboardSink.copyText(payload)
+                NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+                ToastPresenter.show("QR code copied")
+            } catch {
+                self.onError?(error)
+            }
         }
     }
 

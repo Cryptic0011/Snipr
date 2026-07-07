@@ -85,6 +85,12 @@ final class CaptureSelectionNSView: NSView {
         didSet { loupe.sourceScale = sourceScale }
     }
 
+    /// Freeze-screen mode: draw the captured display still behind the dim
+    /// layer so on-screen motion can't shift under the crosshair. The image
+    /// arrives asynchronously via `setSourceImage` (same still the loupe uses).
+    var freezesBackground = false
+    private var frozenBackground: NSImage?
+
     private var startPoint: CGPoint?
     private var currentPoint: CGPoint?
     /// Set when the user holds option mid-drag, applied through `EdgeSnap`.
@@ -142,6 +148,8 @@ final class CaptureSelectionNSView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        frozenBackground?.draw(in: bounds)
+
         NSColor.black.withAlphaComponent(0.28).setFill()
         bounds.fill()
 
@@ -149,8 +157,21 @@ final class CaptureSelectionNSView: NSView {
             return
         }
 
-        NSColor.clear.setFill()
-        selectionRect.fill(using: .clear)
+        if let frozenBackground {
+            // Re-paint the frozen still un-dimmed inside the selection —
+            // punching through with .clear would show the live screen and
+            // break the freeze illusion.
+            let source = NSRect(
+                x: selectionRect.minX,
+                y: bounds.height - selectionRect.maxY,
+                width: selectionRect.width,
+                height: selectionRect.height
+            )
+            frozenBackground.draw(in: selectionRect, from: source, operation: .sourceOver, fraction: 1)
+        } else {
+            NSColor.clear.setFill()
+            selectionRect.fill(using: .clear)
+        }
         drawSelectionFrame(selectionRect)
 
         drawDimensions(for: selectionRect)
@@ -267,6 +288,10 @@ final class CaptureSelectionNSView: NSView {
 
     func setSourceImage(_ image: CGImage) {
         loupe.sourceImage = image
+        if freezesBackground {
+            frozenBackground = NSImage(cgImage: image, size: bounds.size)
+            needsDisplay = true
+        }
     }
 
     private var selectionRect: CGRect? {

@@ -84,9 +84,20 @@ final class SCKRecordingEngine: NSObject, RecordingEngine {
         configuration.capturesAudio = options.capturesSystemAudio
         configuration.pixelFormat = kCVPixelFormatType_32BGRA
 
+        // Mic capture is an SCK 15+ feature; on 14 the option is ignored
+        // (Settings disables the toggle there too).
+        var capturesMicrophone = false
+        if options.capturesMicrophone, #available(macOS 15.0, *) {
+            configuration.captureMicrophone = true
+            capturesMicrophone = true
+        }
+
         let filter = SCContentFilter(display: scDisplay, excludingWindows: [])
 
-        let writer = try AVAssetWriter(outputURL: destinationURL, fileType: .mov)
+        let writer = try AVAssetWriter(
+            outputURL: destinationURL,
+            fileType: options.fileFormat == .mp4 ? .mp4 : .mov
+        )
         let settings: [String: Any] = [
             AVVideoCodecKey: AVVideoCodecType.h264,
             AVVideoWidthKey: width,
@@ -99,14 +110,15 @@ final class SCKRecordingEngine: NSObject, RecordingEngine {
         }
         writer.add(writerInput)
 
+        let audioSettings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: 48_000,
+            AVNumberOfChannelsKey: 2,
+            AVEncoderBitRateKey: 192_000
+        ]
+
         var audioInput: AVAssetWriterInput?
         if options.capturesSystemAudio {
-            let audioSettings: [String: Any] = [
-                AVFormatIDKey: kAudioFormatMPEG4AAC,
-                AVSampleRateKey: 48_000,
-                AVNumberOfChannelsKey: 2,
-                AVEncoderBitRateKey: 192_000
-            ]
             let input = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
             input.expectsMediaDataInRealTime = true
             if writer.canAdd(input) {
@@ -115,11 +127,21 @@ final class SCKRecordingEngine: NSObject, RecordingEngine {
             }
         }
 
+        var micInput: AVAssetWriterInput?
+        if capturesMicrophone {
+            let input = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
+            input.expectsMediaDataInRealTime = true
+            if writer.canAdd(input) {
+                writer.add(input)
+                micInput = input
+            }
+        }
+
         guard writer.startWriting() else {
             throw ScreenRecordingError.writerUnavailable
         }
 
-        state.assignWriter(writer, input: writerInput, audioInput: audioInput)
+        state.assignWriter(writer, input: writerInput, audioInput: audioInput, micInput: micInput)
 
         let adapter = SCKStreamOutputAdapter(state: state) { [weak self] error in
             Task { @MainActor in self?.handleStreamStopped(error) }
@@ -128,6 +150,9 @@ final class SCKRecordingEngine: NSObject, RecordingEngine {
         try stream.addStreamOutput(adapter, type: .screen, sampleHandlerQueue: queue)
         if options.capturesSystemAudio {
             try stream.addStreamOutput(adapter, type: .audio, sampleHandlerQueue: queue)
+        }
+        if capturesMicrophone, #available(macOS 15.0, *) {
+            try stream.addStreamOutput(adapter, type: .microphone, sampleHandlerQueue: queue)
         }
 
         self.streamOutputAdapter = adapter
@@ -145,6 +170,7 @@ final class SCKRecordingEngine: NSObject, RecordingEngine {
             self.pixelSize = .zero
             writerInput.markAsFinished()
             audioInput?.markAsFinished()
+            micInput?.markAsFinished()
             writer.cancelWriting()
             state.clearWriter()
             try? FileManager.default.removeItem(at: destinationURL)
@@ -243,7 +269,9 @@ private final class SCKStreamOutputAdapter: NSObject, SCStreamOutput, SCStreamDe
         case .audio:
             state.appendAudio(sampleBuffer: sampleBuffer)
         default:
-            break
+            if #available(macOS 15.0, *), outputType == .microphone {
+                state.appendMic(sampleBuffer: sampleBuffer)
+            }
         }
     }
 
@@ -270,14 +298,21 @@ private final class SCKRecordingState: @unchecked Sendable {
     private var writer: AVAssetWriter?
     private var writerInput: AVAssetWriterInput?
     private var audioInput: AVAssetWriterInput?
+    private var micInput: AVAssetWriterInput?
     private var firstPresentationTime: CMTime?
     private var lastPresentationTime: CMTime?
     private var finishContinuation: CheckedContinuation<RecordedVideo, Error>?
 
-    func assignWriter(_ writer: AVAssetWriter, input: AVAssetWriterInput, audioInput: AVAssetWriterInput? = nil) {
+    func assignWriter(
+        _ writer: AVAssetWriter,
+        input: AVAssetWriterInput,
+        audioInput: AVAssetWriterInput? = nil,
+        micInput: AVAssetWriterInput? = nil
+    ) {
         self.writer = writer
         self.writerInput = input
         self.audioInput = audioInput
+        self.micInput = micInput
         self.firstPresentationTime = nil
         self.lastPresentationTime = nil
     }
@@ -286,6 +321,7 @@ private final class SCKRecordingState: @unchecked Sendable {
         writer = nil
         writerInput = nil
         audioInput = nil
+        micInput = nil
         firstPresentationTime = nil
         lastPresentationTime = nil
     }
@@ -301,6 +337,17 @@ private final class SCKRecordingState: @unchecked Sendable {
         }
         guard writer.status == .writing, audioInput.isReadyForMoreMediaData else { return }
         _ = audioInput.append(sampleBuffer)
+    }
+
+    func appendMic(sampleBuffer: CMSampleBuffer) {
+        guard let writer, let micInput else { return }
+        let presentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        if firstPresentationTime == nil {
+            firstPresentationTime = presentationTime
+            writer.startSession(atSourceTime: presentationTime)
+        }
+        guard writer.status == .writing, micInput.isReadyForMoreMediaData else { return }
+        _ = micInput.append(sampleBuffer)
     }
 
     func append(sampleBuffer: CMSampleBuffer) {
@@ -334,6 +381,7 @@ private final class SCKRecordingState: @unchecked Sendable {
         finishContinuation = continuation
         writerInput.markAsFinished()
         audioInput?.markAsFinished()
+        micInput?.markAsFinished()
 
         let firstTime = firstPresentationTime
         let lastTime = lastPresentationTime
@@ -373,6 +421,7 @@ private final class SCKRecordingState: @unchecked Sendable {
     func cancelWriting() {
         writerInput?.markAsFinished()
         audioInput?.markAsFinished()
+        micInput?.markAsFinished()
         writer?.cancelWriting()
         if let pending = finishContinuation {
             finishContinuation = nil

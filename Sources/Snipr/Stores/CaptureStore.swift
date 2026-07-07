@@ -75,9 +75,9 @@ final class CaptureStore {
         return item
     }
 
-    func nextRecordingURL() throws -> URL {
+    func nextRecordingURL(fileExtension: String = "mov") throws -> URL {
         try ensureDirectoriesExist()
-        return recordingsDirectory.appending(path: "\(UUID().uuidString).mov")
+        return recordingsDirectory.appending(path: "\(UUID().uuidString).\(fileExtension)")
     }
 
     @discardableResult

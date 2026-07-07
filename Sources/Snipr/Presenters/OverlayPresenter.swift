@@ -10,6 +10,7 @@ enum CaptureOverlayMode: Sendable {
     case screenshot
     case recording
     case ocr
+    case qr
 }
 
 /// Owns the per-screen selection overlay windows. Its job is purely to put up
@@ -31,7 +32,7 @@ final class OverlayPresenter {
 
     init() {}
 
-    func showCaptureOverlays(mode: CaptureOverlayMode, showMagnifier: Bool = false) {
+    func showCaptureOverlays(mode: CaptureOverlayMode, showMagnifier: Bool = false, freezeScreen: Bool = false) {
         closeCaptureOverlays()
         activeMode = mode
         selectionCoordinator.reset()
@@ -49,6 +50,7 @@ final class OverlayPresenter {
             let view = CaptureSelectionNSView()
             view.selectionCoordinator = selectionCoordinator
             view.showsMagnifier = showMagnifier
+            view.freezesBackground = freezeScreen
             view.onCompleteInScreenCoordinates = { [weak self] globalRect, releasePoint in
                 self?.completeSelection(globalRect: globalRect, releasePoint: releasePoint)
             }

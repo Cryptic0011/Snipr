@@ -41,11 +41,24 @@ enum ScreenRecordingError: LocalizedError {
 ///
 /// `@MainActor` for the same reason as `CaptureEngine`: callers hand us an
 /// `NSScreen`. The default SCK implementation hops onto its own queue inside.
+/// Container the recording is written into. MOV is the SCK-native default;
+/// MP4 trades a little flexibility for compatibility everywhere.
+enum RecordingFileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
+    case mov
+    case mp4
+
+    var id: String { rawValue }
+    var fileExtension: String { rawValue }
+    var title: String { rawValue.uppercased() }
+}
+
 /// Phase 3 recording-time options. New options should default to off so
 /// existing call sites compile cleanly and behavior stays unchanged for
 /// callers that don't opt in.
 struct RecordingOptions: Sendable {
     var capturesSystemAudio: Bool
+    var capturesMicrophone: Bool = false
+    var fileFormat: RecordingFileFormat = .mov
 
     static let `default` = RecordingOptions(capturesSystemAudio: false)
 }

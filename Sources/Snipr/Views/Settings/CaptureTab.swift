@@ -22,6 +22,26 @@ struct CaptureSettingsTab: View {
                     set: { model.preferences.showCaptureMagnifier = $0 }
                 ))
 
+                Toggle("Freeze screen while selecting", isOn: Binding(
+                    get: { model.preferences.freezeScreenDuringSelection },
+                    set: { model.preferences.freezeScreenDuringSelection = $0 }
+                ))
+
+                LabeledContent("Self-timer") {
+                    Picker("Self-timer", selection: Binding(
+                        get: { model.preferences.captureDelaySeconds },
+                        set: { model.preferences.captureDelaySeconds = $0 }
+                    )) {
+                        Text("Off").tag(0)
+                        Text("3s").tag(3)
+                        Text("5s").tag(5)
+                        Text("10s").tag(10)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 240)
+                }
+
                 LabeledContent("Format") {
                     Picker("Format", selection: Binding(
                         get: { CaptureFormatChoice(format: model.preferences.captureFormat) },

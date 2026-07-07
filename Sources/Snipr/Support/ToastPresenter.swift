@@ -9,6 +9,13 @@ enum ToastPresenter {
     private static var panel: NSPanel?
     private static var dismissTask: Task<Void, Never>?
 
+    static func dismiss() {
+        dismissTask?.cancel()
+        dismissTask = nil
+        panel?.close()
+        panel = nil
+    }
+
     static func show(_ message: String, systemImage: String = "checkmark.circle.fill") {
         dismissTask?.cancel()
         panel?.close()
@@ -40,6 +47,9 @@ enum ToastPresenter {
         panel.isOpaque = false
         panel.hasShadow = true
         panel.ignoresMouseEvents = true
+        // Keep toasts out of captures and recordings — the self-timer
+        // countdown would otherwise photobomb its own shot.
+        panel.sharingType = .none
         panel.contentView = hosting
         SniprDiagnostics.disableRestoration(for: panel)
 

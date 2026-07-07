@@ -2,6 +2,7 @@ import AppKit
 import Observation
 import ScreenCaptureKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Router that forwards capture / record / preview commands to the appropriate
 /// presenter. Heavy lifting lives in `Presenters/*`; this file stays small
@@ -35,6 +36,7 @@ final class WindowCoordinator {
     let translationEngine: any TranslationEngine
     let ocrEngine: any OCREngine
     let scrollingCapturePresenter: ScrollingCapturePresenter
+    let desktopIconCover = DesktopIconCover()
 
     init(
         captureStore: CaptureStore,
@@ -84,6 +86,8 @@ final class WindowCoordinator {
         case .showOCRHistory: showOCRHistory()
         case .pickColor: startColorPick()
         case .scrollingCapture: startScrollingCapture()
+        case .scanQR: startQRScan()
+        case .toggleDesktopIcons: toggleDesktopIcons()
         }
     }
 
@@ -103,12 +107,20 @@ final class WindowCoordinator {
 
     func startCaptureArea() {
         guard captureFlowPresenter.ensureScreenRecordingAccess() else { return }
-        overlayPresenter.showCaptureOverlays(mode: .screenshot, showMagnifier: preferences.showCaptureMagnifier)
+        overlayPresenter.showCaptureOverlays(
+            mode: .screenshot,
+            showMagnifier: preferences.showCaptureMagnifier,
+            freezeScreen: preferences.freezeScreenDuringSelection
+        )
     }
 
     func startScreenRecordingArea() {
         guard !recordingPresenter.isRecording, captureFlowPresenter.ensureScreenRecordingAccess() else { return }
-        overlayPresenter.showCaptureOverlays(mode: .recording, showMagnifier: preferences.showCaptureMagnifier)
+        overlayPresenter.showCaptureOverlays(
+            mode: .recording,
+            showMagnifier: preferences.showCaptureMagnifier,
+            freezeScreen: preferences.freezeScreenDuringSelection
+        )
     }
 
     func startCaptureFullScreen() {
@@ -150,6 +162,39 @@ final class WindowCoordinator {
     func startOCR() {
         guard captureFlowPresenter.ensureScreenRecordingAccess() else { return }
         overlayPresenter.showCaptureOverlays(mode: .ocr, showMagnifier: preferences.showCaptureMagnifier)
+    }
+
+    func startQRScan() {
+        guard captureFlowPresenter.ensureScreenRecordingAccess() else { return }
+        overlayPresenter.showCaptureOverlays(mode: .qr, showMagnifier: preferences.showCaptureMagnifier)
+    }
+
+    func toggleDesktopIcons() {
+        let hidden = desktopIconCover.toggle()
+        ToastPresenter.show(
+            hidden ? "Desktop icons hidden" : "Desktop icons shown",
+            systemImage: hidden ? "eye.slash" : "eye"
+        )
+    }
+
+    /// Convert a recorded video to an animated GIF via a save panel.
+    func exportGIF(_ item: CaptureItem) {
+        guard item.mediaType == .video else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.gif]
+        panel.nameFieldStringValue = item.fileURL.deletingPathExtension().lastPathComponent + ".gif"
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        ToastPresenter.show("Exporting GIF…", systemImage: "hourglass")
+        Task { @MainActor in
+            do {
+                _ = try await GIFExporter.export(sourceURL: item.fileURL, outputURL: url)
+                ToastPresenter.show("GIF saved")
+            } catch {
+                NSAlert(error: error).runModal()
+            }
+        }
     }
 
     func startColorPick() {
@@ -395,6 +440,8 @@ final class WindowCoordinator {
             recordingPresenter.start(displayID: displayID, screen: screen, rect: rect)
         case .ocr:
             captureFlowPresenter.runOCR(displayID: displayID, screen: screen, rect: rect)
+        case .qr:
+            captureFlowPresenter.runQRScan(displayID: displayID, screen: screen, rect: rect)
         }
     }
 

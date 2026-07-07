@@ -531,6 +531,12 @@ struct CaptureContextMenu: View {
             coordinator.reveal(item)
         }
 
+        if item.mediaType == .video {
+            Button("Export as GIF…") {
+                coordinator.exportGIF(item)
+            }
+        }
+
         Divider()
 
         Button("Delete", role: .destructive) {
