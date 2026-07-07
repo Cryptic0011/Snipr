@@ -6,6 +6,8 @@ APP_NAME="Snipr"
 BUNDLE_ID="com.grayson.snipr"
 MIN_SYSTEM_VERSION="14.0"
 APP_VERSION="${SNIPR_VERSION:-0.1.0}"
+SPARKLE_FEED_URL="https://raw.githubusercontent.com/Cryptic0011/Snipr/main/appcast.xml"
+SPARKLE_PUBLIC_ED_KEY="GPa3gezkwPZ2JAkqkXxa3DDSirwWVGd7kr1/H1Uu0sY="
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -73,6 +75,17 @@ mkdir -p "$APP_MACOS" "$APP_RESOURCES"
 cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
 
+# Sparkle ships as a binary xcframework; the bundle needs the framework
+# embedded and an rpath so the binary can find it.
+SPARKLE_FRAMEWORK="$(/usr/bin/find "$ROOT_DIR/.build/artifacts" -name Sparkle.framework -path "*macos*" -not -path "*dSYMs*" -print -quit)"
+if [[ -z "$SPARKLE_FRAMEWORK" ]]; then
+  echo "Sparkle.framework not found under .build/artifacts" >&2
+  exit 1
+fi
+mkdir -p "$APP_CONTENTS/Frameworks"
+cp -a "$SPARKLE_FRAMEWORK" "$APP_CONTENTS/Frameworks/"
+/usr/bin/install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP_BINARY"
+
 cp "$ROOT_DIR"/Sources/Snipr/Resources/*.png "$APP_RESOURCES"/
 build_app_icon
 
@@ -103,6 +116,10 @@ cat >"$INFO_PLIST" <<PLIST
   <true/>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
+  <key>SUFeedURL</key>
+  <string>$SPARKLE_FEED_URL</string>
+  <key>SUPublicEDKey</key>
+  <string>$SPARKLE_PUBLIC_ED_KEY</string>
 </dict>
 </plist>
 PLIST

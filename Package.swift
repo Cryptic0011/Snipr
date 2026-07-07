@@ -10,9 +10,15 @@ let package = Package(
     products: [
         .executable(name: "Snipr", targets: ["Snipr"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.0")
+    ],
     targets: [
         .executableTarget(
             name: "Snipr",
+            dependencies: [
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
             resources: [
                 .process("Resources")
             ]

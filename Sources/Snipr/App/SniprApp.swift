@@ -1,3 +1,4 @@
+import Sparkle
 import SwiftUI
 
 @main
@@ -46,9 +47,19 @@ final class SniprAppDelegate: NSObject, NSApplicationDelegate {
     let model = SniprAppModel()
     private var statusItem: NSStatusItem?
     private var dashboardWindow: NSWindow?
+    // nil when running outside the .app bundle (swift run, tests): Sparkle
+    // needs SUFeedURL from Info.plist and errors out without a real bundle.
+    private var updaterController: SPUStandardUpdaterController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        if Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil {
+            updaterController = SPUStandardUpdaterController(
+                startingUpdater: true,
+                updaterDelegate: nil,
+                userDriverDelegate: nil
+            )
+        }
         installStatusItem(model: model)
         model.installHotkeys()
         model.coordinator.onOpenMainWindow = { [weak self] in
@@ -116,6 +127,16 @@ final class SniprAppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Snipr", action: #selector(quit), keyEquivalent: ""))
         menu.items.forEach { $0.target = self }
+
+        if let updaterController {
+            let updateItem = NSMenuItem(
+                title: "Check for Updates…",
+                action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
+                keyEquivalent: ""
+            )
+            updateItem.target = updaterController
+            menu.insertItem(updateItem, at: menu.items.count - 1)
+        }
 
         item.menu = menu
         statusItem = item

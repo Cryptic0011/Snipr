@@ -1,6 +1,8 @@
 # Snipr — Handoff for Phase 5 (Distribution) and Phase 4.5 (Scrolling Capture)
 
-**Last update:** 2026-05-07. Phases 0–4 complete and merged to `main`. 127 tests pass. Build clean with `swift build -Xswiftc -warnings-as-errors`.
+**Last update:** 2026-07-07. Phases 0–4 complete, Phase 4.5 (scrolling capture) landed via the display-filter frame source (`8d0a416`), and Phase 5 distribution is live: signed/notarized/stapled DMG plus Sparkle auto-update — see `RELEASING.md`, releases at https://github.com/Cryptic0011/Snipr. 163 tests pass. Build clean with `swift build -Xswiftc -warnings-as-errors`.
+
+> Sections below dated 2026-05-07 predate Phase 4.5/5; where they conflict with the line above (test counts, scrolling capture disabled, "no remote"), the line above wins.
 
 This document gives a fresh agent enough context to pick up the project without reading every prior commit. It complements `plan.md` (the master plan) and `Prompt.md` (the original product blueprint).
 

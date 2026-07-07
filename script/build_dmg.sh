@@ -25,6 +25,19 @@ fi
 SNIPR_VERSION="$VERSION" SNIPR_BUILD_CONFIG=release "$ROOT_DIR/script/build_and_run.sh" --build-only
 
 echo "Signing app with: $SIGNING_IDENTITY"
+# Sparkle's nested executables must carry our team's signature + hardened
+# runtime, or notarization and library validation reject the bundle.
+SPARKLE_B="$APP_BUNDLE/Contents/Frameworks/Sparkle.framework/Versions/B"
+/usr/bin/codesign --force --options runtime --timestamp --preserve-metadata=entitlements \
+  --sign "$SIGNING_IDENTITY" "$SPARKLE_B/XPCServices/Downloader.xpc"
+/usr/bin/codesign --force --options runtime --timestamp \
+  --sign "$SIGNING_IDENTITY" "$SPARKLE_B/XPCServices/Installer.xpc"
+/usr/bin/codesign --force --options runtime --timestamp \
+  --sign "$SIGNING_IDENTITY" "$SPARKLE_B/Autoupdate"
+/usr/bin/codesign --force --options runtime --timestamp \
+  --sign "$SIGNING_IDENTITY" "$SPARKLE_B/Updater.app"
+/usr/bin/codesign --force --options runtime --timestamp \
+  --sign "$SIGNING_IDENTITY" "$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
 /usr/bin/codesign --force --options runtime --timestamp \
   --sign "$SIGNING_IDENTITY" "$APP_BUNDLE"
 /usr/bin/codesign --verify --strict --verbose=2 "$APP_BUNDLE"
