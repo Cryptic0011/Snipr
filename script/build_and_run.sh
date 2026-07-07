@@ -63,8 +63,9 @@ build_app_icon() {
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
 cd "$ROOT_DIR"
-swift build
-BUILD_DIR="$(swift build --show-bin-path)"
+BUILD_CONFIG="${SNIPR_BUILD_CONFIG:-debug}"
+swift build -c "$BUILD_CONFIG"
+BUILD_DIR="$(swift build -c "$BUILD_CONFIG" --show-bin-path)"
 BUILD_BINARY="$BUILD_DIR/$APP_NAME"
 
 rm -rf "$APP_BUNDLE"
