@@ -118,13 +118,13 @@ final class RecordingPresenter {
     private func startRecordingCompanions(screen: NSScreen, rect: CGRect) {
         guard let preferences else { return }
         if preferences.showInputOverlaysWhileRecording {
-            let trusted = InputOverlayService.hasAccessibilityAccess
+            let trusted = InputOverlayService.hasInputMonitoringAccess
             // Click ripples never need permission — always start them.
-            // Keystrokes need Accessibility; prompt once and carry on.
+            // Keystrokes need Input Monitoring; prompt once and carry on.
             inputOverlays.start(keystrokes: trusted)
             if !trusted {
-                InputOverlayService.requestAccessibilityAccess()
-                ToastPresenter.show("Grant Accessibility access for keystroke overlays", systemImage: "exclamationmark.triangle")
+                InputOverlayService.requestInputMonitoringAccess()
+                ToastPresenter.show("Grant Input Monitoring, then relaunch Snipr for keystroke overlays", systemImage: "exclamationmark.triangle")
             }
         }
         if preferences.showWebcamWhileRecording {

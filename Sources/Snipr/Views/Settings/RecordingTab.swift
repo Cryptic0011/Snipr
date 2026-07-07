@@ -49,7 +49,7 @@ struct RecordingSettingsTab: View {
                     get: { model.preferences.showInputOverlaysWhileRecording },
                     set: { model.preferences.showInputOverlaysWhileRecording = $0 }
                 ))
-                Text("Pressed keys and click ripples appear on screen and are captured in the recording. Requires Accessibility access.")
+                Text("Pressed keys and click ripples appear on screen and are captured in the recording. Keystrokes require Input Monitoring access (System Settings → Privacy & Security).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 

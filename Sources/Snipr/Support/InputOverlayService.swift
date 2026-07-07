@@ -31,7 +31,7 @@ enum KeystrokeDisplay {
 
 /// Shows pressed keys and click ripples on screen while a recording runs.
 /// The panels use the default window sharing type on purpose — they exist to
-/// be captured. Requires Accessibility access for global event monitors.
+/// be captured. Keystrokes require Input Monitoring access; clicks need none.
 @MainActor
 final class InputOverlayService {
     private var keyMonitor: Any?
@@ -39,13 +39,12 @@ final class InputOverlayService {
     private var hudPanel: NSPanel?
     private var hudDismissTask: Task<Void, Never>?
 
-    static var hasAccessibilityAccess: Bool { AXIsProcessTrusted() }
+    /// Global keyDown monitors are gated by Input Monitoring (ListenEvent),
+    /// not Accessibility — AXIsProcessTrusted is the wrong check for them.
+    static var hasInputMonitoringAccess: Bool { CGPreflightListenEventAccess() }
 
-    static func requestAccessibilityAccess() {
-        // Literal key instead of kAXTrustedCheckOptionPrompt: the global is a
-        // mutable C var that Swift 6 strict concurrency refuses to touch.
-        let options = ["AXTrustedCheckOptionPrompt" as CFString: true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options)
+    static func requestInputMonitoringAccess() {
+        _ = CGRequestListenEventAccess()
     }
 
     var isActive: Bool { keyMonitor != nil || clickMonitor != nil }
@@ -164,7 +163,7 @@ private struct ClickRippleView: View {
 
     var body: some View {
         Circle()
-            .stroke(Color(red: 0.804, green: 0.667, blue: 0.329), lineWidth: 3)
+            .stroke(Color.white, lineWidth: 3)
             .scaleEffect(expanded ? 1.0 : 0.25)
             .opacity(expanded ? 0 : 0.9)
             .animation(.easeOut(duration: 0.4), value: expanded)
