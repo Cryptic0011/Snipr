@@ -221,7 +221,7 @@ enum VideoCompositor {
             layer.startPoint = CGPoint(x: 0, y: 0)
             layer.endPoint = CGPoint(x: 1, y: 1)
             return layer
-        case .bundled, .wallpaper:
+        case .bundled, .wallpaper, .customImage:
             let layer = CALayer()
             layer.frame = frame
             if let image = backdrop.resolveImage(for: screen) {
@@ -233,6 +233,11 @@ enum VideoCompositor {
                 // Wallpaper unreadable — graphite gradient fallback (spec).
                 return backdropLayer(for: .gradient(.graphite), screen: nil, canvas: canvas)
             }
+            return layer
+        case .color(let rgba):
+            let layer = CALayer()
+            layer.frame = frame
+            layer.backgroundColor = rgba.cgColor
             return layer
         }
     }

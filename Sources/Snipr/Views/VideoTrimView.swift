@@ -46,12 +46,14 @@ struct VideoTrimView: View {
         switch backdrop {
         case .gradient(let style):
             style.previewGradient
-        case .bundled, .wallpaper:
+        case .bundled, .wallpaper, .customImage:
             if let image = backdrop?.resolveImage(for: nil) {
                 Image(nsImage: image).resizable().scaledToFill().clipped()
             } else {
                 Color.black
             }
+        case .color(let rgba):
+            Color(red: rgba.red, green: rgba.green, blue: rgba.blue, opacity: rgba.alpha)
         case nil:
             Color.black
         }

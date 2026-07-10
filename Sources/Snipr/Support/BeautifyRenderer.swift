@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Gradient backdrop presets for the share-ready "background" export. Colors
 /// are fixed pairs — presets, not a color picker, on purpose.
-enum BeautifyStyle: String, CaseIterable, Identifiable, Sendable {
+enum BeautifyStyle: String, CaseIterable, Identifiable, Sendable, Codable {
     case brass
     case ocean
     case sunset
