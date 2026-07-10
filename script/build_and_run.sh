@@ -121,6 +121,17 @@ cat >"$INFO_PLIST" <<PLIST
   <string>Snipr records your microphone only when you enable it for a screen recording.</string>
   <key>NSCameraUsageDescription</key>
   <string>Snipr shows your camera in the webcam bubble only when you enable it for a screen recording.</string>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>$BUNDLE_ID</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>snipr</string>
+      </array>
+    </dict>
+  </array>
   <key>SUFeedURL</key>
   <string>$SPARKLE_FEED_URL</string>
   <key>SUPublicEDKey</key>
