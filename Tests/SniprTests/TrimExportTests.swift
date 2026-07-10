@@ -18,6 +18,12 @@ final class TrimExportTests: XCTestCase {
         XCTAssertNil(TrimExporter.clampedRange(start: 1.0, end: 1.01, duration: 5))
     }
 
+    func testClampedRangeRejectsRangeEntirelyBeyondDuration() {
+        // Both bounds past the end collapse to [duration, duration] — empty,
+        // so no trim should be applied (VideoCompositor relies on this).
+        XCTAssertNil(TrimExporter.clampedRange(start: 12, end: 15, duration: 10))
+    }
+
     func testClampedRangeAllowsValidRange() throws {
         let result = try XCTUnwrap(TrimExporter.clampedRange(start: 1, end: 4, duration: 5))
         XCTAssertEqual(result.start, 1)

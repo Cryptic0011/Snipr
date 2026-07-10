@@ -161,10 +161,15 @@ enum VideoCompositor {
         session.outputURL = outputURL
         let fileType: AVFileType = outputURL.pathExtension.lowercased() == "mp4" ? .mp4 : .mov
         session.outputFileType = fileType
-        if let trimStart, let trimEnd, trimEnd > trimStart {
+        // Clamp both bounds to [0, duration] before validating — reuses
+        // TrimExporter's math so an out-of-range request (e.g. both bounds
+        // past the asset's freshly-loaded duration) degrades to a full-length
+        // export instead of an invalid CMTimeRange and a failed session.
+        if let trimStart, let trimEnd,
+           let range = TrimExporter.clampedRange(start: trimStart, end: trimEnd, duration: durationSeconds) {
             session.timeRange = CMTimeRange(
-                start: CMTime(seconds: max(0, trimStart), preferredTimescale: 600),
-                end: CMTime(seconds: min(durationSeconds, trimEnd), preferredTimescale: 600)
+                start: CMTime(seconds: range.start, preferredTimescale: 600),
+                end: CMTime(seconds: range.end, preferredTimescale: 600)
             )
         }
 
