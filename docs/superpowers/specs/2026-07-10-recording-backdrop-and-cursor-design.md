@@ -75,16 +75,17 @@ One AVFoundation compositor used by both features, built on
 
 ### 3. Cursor sampling (Engines/RecordingEngine path)
 
-- New preferences (see §4). When custom cursor is enabled and the recording
-  mode is **region or full screen**, `SCStreamConfiguration.showsCursor =
-  false` and a `CursorSampler` polls `NSEvent.mouseLocation` at 60 Hz on a
-  main-actor timer, storing `(time, point)` in memory. No permissions, no
-  sidecar files.
+- New preferences (see §4). When custom cursor is enabled,
+  `SCStreamConfiguration.showsCursor = false` and a `CursorSampler` polls
+  `NSEvent.mouseLocation` at 60 Hz on a main-actor timer, storing
+  `(time, point)` in memory. No permissions, no sidecar files.
+- Applies to **all recording modes**. (Planning discovery: Snipr's "window
+  recording" is a region recording of the window's rect — it routes through
+  the same `RecordingPresenter.start(displayID:screen:rect:)` — so the
+  originally-specced window-mode limitation doesn't exist.)
 - Coordinate mapping: global screen points → recorded region rect → video
   pixel coordinates, using the recording's known region and scale factor.
   Samples outside the region simply render outside the frame (clipped).
-- **Window recordings keep the system cursor** (v1 limitation — a moving
-  window makes the mapping unreliable).
 - On stop: recording finishes to a temp URL → compositor bakes the cursor →
   baked file becomes the stored capture item. If the bake fails, fall back
   to storing the raw recording and surface the error via toast.
@@ -99,8 +100,9 @@ recordingCursorColor: RGBA         (default white arrow, dark outline)
 ```
 
 Settings → Recording tab gets a "Custom Cursor" group: toggle, smoothing
-toggle, size slider, color well. Size/color rows disabled while the main
-toggle is off, with a footnote that it applies to region/screen recordings.
+toggle, size slider, color preset picker (`CursorColor` enum — presets, not
+a free color well, matching `WebcamBorderColor`). Size/color rows disabled
+while the main toggle is off.
 
 ### 5. UI — video preview (`VideoTrimView`)
 
@@ -132,7 +134,6 @@ toggle is off, with a footnote that it applies to region/screen recordings.
 ## Out of scope (deliberate)
 
 - Padding/corner/shadow knobs (screenshot Beautify has none either).
-- Custom cursor for window-mode recordings.
 - Click-highlight rings on the synthetic cursor (the live ripple overlay
   feature already exists; can composite later if wanted).
 - Cursor zoom/auto-pan effects (Screen Studio territory — separate feature).
