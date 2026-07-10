@@ -15,4 +15,14 @@ enum SniprAssets {
 
         return nil
     }
+
+    static func wallpaper(named name: String) -> NSImage? {
+        for bundle in [Bundle.main, Bundle.module] {
+            if let url = bundle.url(forResource: name, withExtension: "jpg"),
+               let image = NSImage(contentsOf: url) {
+                return image
+            }
+        }
+        return nil
+    }
 }

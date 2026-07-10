@@ -87,6 +87,7 @@ cp -a "$SPARKLE_FRAMEWORK" "$APP_CONTENTS/Frameworks/"
 /usr/bin/install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP_BINARY"
 
 cp "$ROOT_DIR"/Sources/Snipr/Resources/*.png "$APP_RESOURCES"/
+cp "$ROOT_DIR"/Sources/Snipr/Resources/Wallpapers/*.jpg "$APP_RESOURCES"/
 build_app_icon
 
 cat >"$INFO_PLIST" <<PLIST
