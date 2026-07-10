@@ -15,13 +15,15 @@ struct VideoTrimView: View {
     @State private var trimEnd: TimeInterval = 0
     @State private var isExporting = false
     @State private var exportError: String?
+    @State private var backdrop: VideoBackdrop?
 
     var body: some View {
         VStack(spacing: 0) {
             if let player {
                 AVPlayerViewWrapper(player: player)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.black)
+                    .padding(backdrop == nil ? 0 : 24)
+                    .background { backdropPreview }
             } else {
                 Rectangle()
                     .fill(Color.black)
@@ -39,10 +41,46 @@ struct VideoTrimView: View {
         }
     }
 
+    @ViewBuilder
+    private var backdropPreview: some View {
+        switch backdrop {
+        case .gradient(let style):
+            style.previewGradient
+        case .bundled, .wallpaper:
+            if let image = backdrop?.resolveImage(for: nil) {
+                Image(nsImage: image).resizable().scaledToFill().clipped()
+            } else {
+                Color.black
+            }
+        case nil:
+            Color.black
+        }
+    }
+
     private var controls: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Trim")
-                .font(.headline)
+            HStack {
+                Text("Trim")
+                    .font(.headline)
+                Spacer()
+                Picker("Background", selection: $backdrop) {
+                    Text("None").tag(VideoBackdrop?.none)
+                    ForEach(VideoBackdrop.pickerGroups, id: \.label) { group in
+                        Section(group.label) {
+                            ForEach(group.options) { option in
+                                Text(option.title).tag(VideoBackdrop?.some(option))
+                            }
+                        }
+                    }
+                }
+                .fixedSize()
+                .help("Composite the export over a backdrop, like screenshot Beautify")
+            }
+            if backdrop != nil, case .bundled = backdrop {
+                Text("Bundled wallpapers courtesy of the Recordly project.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
 
             if duration > 0 {
                 HStack(spacing: 12) {
@@ -121,20 +159,33 @@ struct VideoTrimView: View {
     @MainActor
     private func exportTrimmed() async {
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = item.fileURL.deletingPathExtension().lastPathComponent + "-trimmed.mov"
-        panel.allowedContentTypes = [.quickTimeMovie]
+        let suffix = backdrop == nil ? "-trimmed.mov" : "-styled.mov"
+        panel.nameFieldStringValue = item.fileURL.deletingPathExtension().lastPathComponent + suffix
+        panel.allowedContentTypes = [.quickTimeMovie, .mpeg4Movie]
         guard panel.runModal() == .OK, let outURL = panel.url else { return }
 
         isExporting = true
         exportError = nil
         defer { isExporting = false }
         do {
-            _ = try await TrimExporter.export(
-                sourceURL: item.fileURL,
-                outputURL: outURL,
-                start: trimStart,
-                end: trimEnd
-            )
+            if let backdrop {
+                _ = try await VideoCompositor.composite(
+                    sourceURL: item.fileURL,
+                    outputURL: outURL,
+                    backdrop: backdrop,
+                    backdropScreen: NSScreen.main,
+                    cursor: nil,
+                    trimStart: trimStart,
+                    trimEnd: trimEnd
+                )
+            } else {
+                _ = try await TrimExporter.export(
+                    sourceURL: item.fileURL,
+                    outputURL: outURL,
+                    start: trimStart,
+                    end: trimEnd
+                )
+            }
         } catch {
             exportError = error.localizedDescription
         }

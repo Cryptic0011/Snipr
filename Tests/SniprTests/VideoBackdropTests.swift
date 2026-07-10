@@ -23,4 +23,12 @@ final class VideoBackdropTests: XCTestCase {
         XCTAssertNotNil(VideoBackdrop.bundled("sequoia-blue").resolveImage(for: nil))
         XCTAssertNil(VideoBackdrop.gradient(.brass).resolveImage(for: nil))
     }
+
+    func testPickerGroupsCoverAllOptions() {
+        let groups = VideoBackdrop.pickerGroups
+        XCTAssertEqual(groups.map(\.label), ["Gradients", "Wallpapers", "Desktop"])
+        XCTAssertEqual(groups[0].options.count, BeautifyStyle.allCases.count)
+        XCTAssertEqual(groups[1].options.count, VideoBackdrop.bundledWallpaperNames.count)
+        XCTAssertEqual(groups[2].options, [.wallpaper])
+    }
 }

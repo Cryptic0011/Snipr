@@ -17,6 +17,14 @@ enum VideoBackdrop: Hashable, Identifiable {
         "ventura-dark", "ventura"
     ]
 
+    /// Menu layout for the export pickers: gradients, bundled wallpapers,
+    /// then the live desktop wallpaper.
+    static let pickerGroups: [(label: String, options: [VideoBackdrop])] = [
+        ("Gradients", BeautifyStyle.allCases.map { .gradient($0) }),
+        ("Wallpapers", bundledWallpaperNames.map { .bundled($0) }),
+        ("Desktop", [.wallpaper])
+    ]
+
     var id: String {
         switch self {
         case .gradient(let style): "gradient-\(style.rawValue)"

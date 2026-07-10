@@ -90,6 +90,11 @@ Plain SwiftPM — no Xcode project. `HANDOFF.md` maps the architecture;
 `RELEASING.md` covers signing, notarization, and shipping your own fork's
 releases (you'll need your own Developer ID and Sparkle keys).
 
+## Credits
+
+- Bundled recording-backdrop wallpapers are curated from the
+  [Recordly](https://github.com/webadderallorg/Recordly) project (AGPLv3).
+
 ## License
 
 [MIT](LICENSE). Fork it, rename it, ship it.
