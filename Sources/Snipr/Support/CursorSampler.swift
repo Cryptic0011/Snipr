@@ -11,10 +11,19 @@ struct CursorSample: Equatable, Sendable {
 @MainActor
 final class CursorSampler {
     private(set) var samples: [CursorSample] = []
-    private var timer: Timer?
+    // nonisolated(unsafe) only so the nonisolated deinit can invalidate it;
+    // all other access stays on the main actor, and deinit has exclusive
+    // access to stored properties.
+    private nonisolated(unsafe) var timer: Timer?
     private var startedAt: TimeInterval = 0
 
     var isSampling: Bool { timer != nil }
+
+    deinit {
+        // RunLoop.main retains the timer independently of this object; without
+        // this, releasing the sampler mid-run would leave it firing forever.
+        timer?.invalidate()
+    }
 
     func start() {
         discard()

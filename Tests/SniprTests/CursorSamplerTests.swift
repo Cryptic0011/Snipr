@@ -32,6 +32,17 @@ final class CursorSamplerTests: XCTestCase {
     }
 
     @MainActor
+    func testDiscardStopsSamplingAndDropsSamples() async throws {
+        let sampler = CursorSampler()
+        sampler.start()
+        XCTAssertTrue(sampler.isSampling)
+        try await Task.sleep(nanoseconds: 100_000_000)   // let a few ticks land
+        sampler.discard()
+        XCTAssertFalse(sampler.isSampling)
+        XCTAssertTrue(sampler.samples.isEmpty)
+    }
+
+    @MainActor
     func testSamplerCollectsSamplesWhileRunning() async throws {
         let sampler = CursorSampler()
         sampler.start()
