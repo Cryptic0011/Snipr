@@ -16,13 +16,20 @@ struct VideoTrimView: View {
     @State private var isExporting = false
     @State private var exportError: String?
     @State private var backdrop: VideoBackdrop?
+    @State private var style = ExportStyle.load()
+    @State private var showStylePopover = false
+    @State private var customImageName: String?
 
     var body: some View {
         VStack(spacing: 0) {
             if let player {
                 AVPlayerViewWrapper(player: player)
+                    // Constrain to the video's own aspect so the backdrop —
+                    // not AVPlayerView's black letterboxing — fills the pane.
+                    .aspectRatio(videoAspect, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: backdrop == nil ? 0 : style.cornerRadius))
+                    .padding(backdrop == nil ? 0 : previewPadding)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(backdrop == nil ? 0 : 24)
                     .background { backdropPreview }
             } else {
                 Rectangle()
@@ -35,10 +42,25 @@ struct VideoTrimView: View {
         }
         .onAppear {
             player = AVPlayer(url: item.fileURL)
+            backdrop = VideoBackdrop.loadSelection()
+            if case .customImage(let url) = backdrop {
+                customImageName = url.lastPathComponent
+            }
         }
         .task {
             await loadDuration()
         }
+        .onChange(of: style) { _, newValue in newValue.save() }
+        .onChange(of: backdrop) { _, newValue in VideoBackdrop.saveSelection(newValue) }
+    }
+
+    private var videoAspect: CGFloat {
+        CGFloat(max(1, item.pixelWidth)) / CGFloat(max(1, item.pixelHeight))
+    }
+
+    /// Preview-scale approximation of the export padding.
+    private var previewPadding: CGFloat {
+        24 * style.paddingFraction / 0.08
     }
 
     @ViewBuilder
@@ -59,13 +81,20 @@ struct VideoTrimView: View {
         }
     }
 
-    private var controls: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Trim")
-                    .font(.headline)
-                Spacer()
-                Picker("Background", selection: $backdrop) {
+    private var colorBinding: Binding<Color> {
+        Binding(
+            get: {
+                if case .color(let rgba) = backdrop { return rgba.color }
+                return Color.black
+            },
+            set: { backdrop = .color(RGBA(color: $0)) }
+        )
+    }
+
+    private var stylePopover: some View {
+        Form {
+            Section("Background") {
+                Picker("Preset", selection: $backdrop) {
                     Text("None").tag(VideoBackdrop?.none)
                     ForEach(VideoBackdrop.pickerGroups, id: \.label) { group in
                         Section(group.label) {
@@ -75,13 +104,74 @@ struct VideoTrimView: View {
                         }
                     }
                 }
-                .fixedSize()
-                .help("Composite the export over a backdrop, like screenshot Beautify")
+
+                SwiftUI.ColorPicker("Color", selection: colorBinding, supportsOpacity: false)
+
+                LabeledContent("Custom Image") {
+                    Button(customImageName ?? "Choose…") {
+                        let panel = NSOpenPanel()
+                        panel.allowedContentTypes = [.image]
+                        panel.allowsMultipleSelection = false
+                        if panel.runModal() == .OK, let url = panel.url {
+                            backdrop = .customImage(url)
+                            customImageName = url.lastPathComponent
+                        }
+                    }
+                }
+
+                if case .bundled = backdrop {
+                    Text("Bundled wallpapers courtesy of the Recordly project.")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
             }
-            if backdrop != nil, case .bundled = backdrop {
-                Text("Bundled wallpapers courtesy of the Recordly project.")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+
+            Section("Frame") {
+                LabeledContent("Padding") {
+                    Slider(value: $style.paddingFraction, in: 0...0.30)
+                    Text(style.paddingFraction, format: .percent.precision(.fractionLength(0)))
+                        .monospacedDigit().frame(width: 44, alignment: .trailing)
+                }
+                LabeledContent("Corner radius") {
+                    Slider(value: $style.cornerRadius, in: 0...40)
+                    Text("\(Int(style.cornerRadius))")
+                        .monospacedDigit().frame(width: 44, alignment: .trailing)
+                }
+                LabeledContent("Shadow") {
+                    Slider(value: $style.shadowOpacity, in: 0...1)
+                    Text(style.shadowOpacity, format: .percent.precision(.fractionLength(0)))
+                        .monospacedDigit().frame(width: 44, alignment: .trailing)
+                }
+            }
+
+            Section("Canvas") {
+                Picker("Aspect", selection: $style.aspect) {
+                    ForEach(CanvasAspect.allCases) { aspect in
+                        Text(aspect.title).tag(aspect)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 340)
+        .padding(8)
+    }
+
+    private var controls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Trim")
+                    .font(.headline)
+                Spacer()
+                Button {
+                    showStylePopover.toggle()
+                } label: {
+                    Label("Style", systemImage: "paintbrush")
+                }
+                .popover(isPresented: $showStylePopover, arrowEdge: .bottom) {
+                    stylePopover
+                }
             }
 
             if duration > 0 {
@@ -178,7 +268,8 @@ struct VideoTrimView: View {
                     backdropScreen: NSScreen.main,
                     cursor: nil,
                     trimStart: trimStart,
-                    trimEnd: trimEnd
+                    trimEnd: trimEnd,
+                    style: style
                 )
             } else {
                 _ = try await TrimExporter.export(
