@@ -145,11 +145,31 @@ enum VideoCompositor {
         // ---- Composition ----
         let composition = AVMutableVideoComposition(propertiesOf: asset)
         composition.renderSize = canvas
-        composition.instructions = passthroughInstruction(for: videoTrack, duration: duration)
+        composition.instructions = scaledInstruction(
+            for: videoTrack,
+            duration: duration,
+            videoSize: videoSize,
+            canvas: canvas
+        )
         composition.animationTool = AVVideoCompositionCoreAnimationTool(
             postProcessingAsVideoLayer: videoLayer,
             in: parentLayer
         )
+        // AVAssetWriter recordings of a mostly-static screen (ScreenCaptureKit)
+        // carry very sparse tracks — sometimes ~1 fps. `propertiesOf:` above
+        // inherits that nominal frame rate as frameDuration, which would only
+        // sample the cursor's CAKeyframeAnimation once a second and throw
+        // away the dense 60 Hz cursor path + cubic smoothing at render time.
+        // Force a dense output cadence so the cursor animation is actually
+        // resolved.
+        composition.frameDuration = CMTime(value: 1, timescale: 60)
+        // `propertiesOf:` also defaults sourceTrackIDForFrameTiming to the
+        // single video track's ID for this passthrough-shaped composition,
+        // which makes AVFoundation derive frame timing straight from the
+        // source's (sparse) sample presentation times and silently ignore
+        // frameDuration above. Clearing it back to "invalid" is what
+        // actually makes the forced frameDuration take effect.
+        composition.sourceTrackIDForFrameTiming = kCMPersistentTrackID_Invalid
 
         if FileManager.default.fileExists(atPath: outputURL.path) {
             try FileManager.default.removeItem(at: outputURL)
@@ -264,16 +284,37 @@ enum VideoCompositor {
         return shape
     }
 
-    /// The CA tool stretches video content to fill `videoLayer`; the
-    /// composition instruction only needs to pass the track through
-    /// untransformed at its natural size.
-    private static func passthroughInstruction(
+    /// `AVVideoCompositionCoreAnimationTool(postProcessingAsVideoLayer:in:)`
+    /// hands the instruction-composited frame — rendered at
+    /// `composition.renderSize` — into `videoLayer`, squeezing it to fit
+    /// that layer's bounds. When there's no backdrop, `videoLayer` is
+    /// canvas-sized so the squeeze is an identity. But with a backdrop,
+    /// `videoLayer` is the smaller, centered video rect while renderSize is
+    /// the padded canvas: a passthrough instruction would place the
+    /// natural-size video in the canvas's top-left corner (per this layer
+    /// instruction's implicit identity transform), and squeezing that whole
+    /// canvas-sized frame into the smaller video rect distorts the aspect
+    /// ratio and drags in the canvas's black background as bands. Scaling
+    /// the track up to canvas size here cancels that squeeze exactly, so
+    /// the video content that lands in `videoLayer` is undistorted.
+    private static func scaledInstruction(
         for track: AVAssetTrack,
-        duration: CMTime
+        duration: CMTime,
+        videoSize: CGSize,
+        canvas: CGSize
     ) -> [AVMutableVideoCompositionInstruction] {
         let instruction = AVMutableVideoCompositionInstruction()
         instruction.timeRange = CMTimeRange(start: .zero, duration: duration)
         let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: track)
+        if videoSize.width > 0, videoSize.height > 0 {
+            layerInstruction.setTransform(
+                CGAffineTransform(
+                    scaleX: canvas.width / videoSize.width,
+                    y: canvas.height / videoSize.height
+                ),
+                at: .zero
+            )
+        }
         instruction.layerInstructions = [layerInstruction]
         return [instruction]
     }
