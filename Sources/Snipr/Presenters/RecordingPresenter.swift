@@ -17,6 +17,8 @@ final class RecordingPresenter {
     private var activeRecordingDisplayID: CGDirectDisplayID?
     private let inputOverlays = InputOverlayService()
     private let webcamBubble = WebcamBubblePresenter()
+    private let cursorSampler = CursorSampler()
+    private var activeRecordingRegion: NSRect?   // global Cocoa coords
 
     /// Called when a new recording lands in the capture store so the
     /// coordinator can reveal the stack.
@@ -60,6 +62,7 @@ final class RecordingPresenter {
             do {
                 let format = preferences?.recordingFormat ?? .mov
                 let destinationURL = try captureStore.nextRecordingURL(fileExtension: format.fileExtension)
+                let customCursor = preferences?.recordingCustomCursor ?? false
                 try await recordingEngine.start(
                     displayID: displayID,
                     rectInDisplayPoints: rect,
@@ -68,10 +71,22 @@ final class RecordingPresenter {
                     options: RecordingOptions(
                         capturesSystemAudio: preferences?.recordSystemAudio ?? false,
                         capturesMicrophone: preferences?.recordMicrophone ?? false,
-                        fileFormat: format
+                        fileFormat: format,
+                        hidesSystemCursor: customCursor
                     )
                 )
                 activeRecordingDisplayID = displayID
+                if customCursor {
+                    // Same rect math as the companions: top-left display
+                    // points → global Cocoa coordinates.
+                    activeRecordingRegion = NSRect(
+                        x: screen.frame.minX + rect.minX,
+                        y: screen.frame.maxY - rect.maxY,
+                        width: rect.width,
+                        height: rect.height
+                    )
+                    cursorSampler.start()
+                }
                 showRecordingRegionFrame(screen: screen, rect: rect)
                 showRecordingHUD()
                 startRecordingCompanions(screen: screen, rect: rect)
@@ -89,17 +104,38 @@ final class RecordingPresenter {
 
             do {
                 let recordedVideo = try await self.recordingEngine.stop()
+                let samples = self.cursorSampler.stop()
                 self.closeRecordingHUD()
+
+                var finalVideo = recordedVideo
+                if let region = self.activeRecordingRegion, !samples.isEmpty, let preferences = self.preferences {
+                    ToastPresenter.show("Finishing recording…", systemImage: "cursorarrow.motionlines")
+                    do {
+                        finalVideo = try await self.bakeCursor(
+                            into: recordedVideo,
+                            samples: samples,
+                            region: region,
+                            preferences: preferences
+                        )
+                    } catch {
+                        // Never lose the recording — store the raw file and say why.
+                        self.onError?(error)
+                    }
+                }
+                self.activeRecordingRegion = nil
+
                 _ = try self.captureStore.addRecording(
-                    fileURL: recordedVideo.fileURL,
-                    pixelSize: recordedVideo.pixelSize,
+                    fileURL: finalVideo.fileURL,
+                    pixelSize: finalVideo.pixelSize,
                     displayID: self.activeRecordingDisplayID,
-                    duration: recordedVideo.duration
+                    duration: finalVideo.duration
                 )
                 self.activeRecordingDisplayID = nil
                 self.onRecordingFinished?()
             } catch {
                 self.activeRecordingDisplayID = nil
+                self.cursorSampler.discard()
+                self.activeRecordingRegion = nil
                 self.closeRecordingHUD()
                 self.onError?(error)
             }
@@ -109,7 +145,39 @@ final class RecordingPresenter {
     func cancel() {
         recordingEngine.cancel()
         activeRecordingDisplayID = nil
+        cursorSampler.discard()
+        activeRecordingRegion = nil
         closeRecordingHUD()
+    }
+
+    /// Re-encode once to draw the synthetic cursor over the recording, then
+    /// atomically swap the baked file into the original URL so downstream
+    /// (store, GIF export, trim) never knows the difference.
+    private func bakeCursor(
+        into video: RecordedVideo,
+        samples: [CursorSample],
+        region: NSRect,
+        preferences: SniprPreferences
+    ) async throws -> RecordedVideo {
+        let bakedURL = video.fileURL.deletingPathExtension()
+            .appendingPathExtension("baked." + video.fileURL.pathExtension)
+        _ = try await VideoCompositor.composite(
+            sourceURL: video.fileURL,
+            outputURL: bakedURL,
+            backdrop: nil,
+            backdropScreen: nil,
+            cursor: CursorOverlaySpec(
+                samples: samples,
+                regionInScreen: region,
+                scale: preferences.recordingCursorScale,
+                color: preferences.recordingCursorColor,
+                smoothed: preferences.recordingCursorSmoothing
+            ),
+            trimStart: nil,
+            trimEnd: nil
+        )
+        _ = try FileManager.default.replaceItemAt(video.fileURL, withItemAt: bakedURL)
+        return RecordedVideo(fileURL: video.fileURL, pixelSize: video.pixelSize, duration: video.duration)
     }
 
     /// Keystroke/click overlays and the webcam bubble live exactly as long as

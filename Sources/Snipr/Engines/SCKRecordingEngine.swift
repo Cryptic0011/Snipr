@@ -80,7 +80,7 @@ final class SCKRecordingEngine: NSObject, RecordingEngine {
         configuration.height = height
         configuration.scalesToFit = false
         configuration.minimumFrameInterval = CMTime(value: 1, timescale: 30)
-        configuration.showsCursor = true
+        configuration.showsCursor = !options.hidesSystemCursor
         configuration.capturesAudio = options.capturesSystemAudio
         configuration.pixelFormat = kCVPixelFormatType_32BGRA
 

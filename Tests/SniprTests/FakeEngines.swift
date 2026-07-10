@@ -63,6 +63,18 @@ final class FakeRecordingEngine: RecordingEngine {
     var onUnexpectedStop: ((Error) -> Void)?
     var stubbedStartError: Error?
     var stubbedStopResult: Result<RecordedVideo, Error>?
+    var lastOptions: RecordingOptions?
+
+    func start(
+        displayID: CGDirectDisplayID,
+        rectInDisplayPoints: CGRect,
+        screen: NSScreen,
+        destinationURL: URL,
+        options: RecordingOptions
+    ) async throws {
+        lastOptions = options
+        try await start(displayID: displayID, rectInDisplayPoints: rectInDisplayPoints, screen: screen, destinationURL: destinationURL)
+    }
 
     func start(displayID: CGDirectDisplayID, rectInDisplayPoints: CGRect, screen: NSScreen, destinationURL: URL) async throws {
         startCalls.append(StartCall(displayID: displayID, rectInDisplayPoints: rectInDisplayPoints, screen: screen, destinationURL: destinationURL))

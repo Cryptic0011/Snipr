@@ -59,6 +59,8 @@ struct RecordingOptions: Sendable {
     var capturesSystemAudio: Bool
     var capturesMicrophone: Bool = false
     var fileFormat: RecordingFileFormat = .mov
+    /// Record without the system cursor (a synthetic one is baked in later).
+    var hidesSystemCursor: Bool = false
 
     static let `default` = RecordingOptions(capturesSystemAudio: false)
 }
