@@ -15,6 +15,7 @@ final class SniprPreferences {
         static let copyToClipboardOnCapture = "copyToClipboardOnCapture"
         static let saveToDiskOnCapture = "saveToDiskOnCapture"
         static let showCaptureMagnifier = "showCaptureMagnifier"
+        static let showSelectionCoordinates = "showSelectionCoordinates"
         static let captureFormat = "captureFormat"
         static let captureFilenameTemplate = "captureFilenameTemplate"
         static let colorOutputFormat = "colorOutputFormat"
@@ -73,6 +74,11 @@ final class SniprPreferences {
 
     var showCaptureMagnifier: Bool {
         didSet { defaults.set(showCaptureMagnifier, forKey: Keys.showCaptureMagnifier) }
+    }
+
+    /// Show the cursor / selection x,y readout on capture overlays.
+    var showSelectionCoordinates: Bool {
+        didSet { defaults.set(showSelectionCoordinates, forKey: Keys.showSelectionCoordinates) }
     }
 
     /// Phase 1: encoded format new captures land on disk / clipboard as.
@@ -185,6 +191,7 @@ final class SniprPreferences {
         copyToClipboardOnCapture = defaults.object(forKey: Keys.copyToClipboardOnCapture) as? Bool ?? true
         saveToDiskOnCapture = defaults.object(forKey: Keys.saveToDiskOnCapture) as? Bool ?? true
         showCaptureMagnifier = defaults.object(forKey: Keys.showCaptureMagnifier) as? Bool ?? false
+        showSelectionCoordinates = defaults.object(forKey: Keys.showSelectionCoordinates) as? Bool ?? false
         captureFormat = Self.loadCaptureFormat(from: defaults)
         captureFilenameTemplate = (defaults.object(forKey: Keys.captureFilenameTemplate) as? String)
             ?? CaptureFilenameTemplate.defaultTemplate

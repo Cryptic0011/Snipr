@@ -75,6 +75,7 @@ final class WindowCoordinator {
     func execute(_ command: SniprCommand) {
         switch command.id {
         case .captureArea: startCaptureArea()
+        case .captureWindow: startWindowCapture()
         case .recordArea: startScreenRecordingArea()
         case .captureToolbar: showCaptureToolbar()
         case .openHistory:
@@ -110,6 +111,7 @@ final class WindowCoordinator {
         overlayPresenter.showCaptureOverlays(
             mode: .screenshot,
             showMagnifier: preferences.showCaptureMagnifier,
+            showCoordinates: preferences.showSelectionCoordinates,
             freezeScreen: preferences.freezeScreenDuringSelection
         )
     }
@@ -119,6 +121,7 @@ final class WindowCoordinator {
         overlayPresenter.showCaptureOverlays(
             mode: .recording,
             showMagnifier: preferences.showCaptureMagnifier,
+            showCoordinates: preferences.showSelectionCoordinates,
             freezeScreen: preferences.freezeScreenDuringSelection
         )
     }
@@ -161,12 +164,12 @@ final class WindowCoordinator {
 
     func startOCR() {
         guard captureFlowPresenter.ensureScreenRecordingAccess() else { return }
-        overlayPresenter.showCaptureOverlays(mode: .ocr, showMagnifier: preferences.showCaptureMagnifier)
+        overlayPresenter.showCaptureOverlays(mode: .ocr, showMagnifier: preferences.showCaptureMagnifier, showCoordinates: preferences.showSelectionCoordinates)
     }
 
     func startQRScan() {
         guard captureFlowPresenter.ensureScreenRecordingAccess() else { return }
-        overlayPresenter.showCaptureOverlays(mode: .qr, showMagnifier: preferences.showCaptureMagnifier)
+        overlayPresenter.showCaptureOverlays(mode: .qr, showMagnifier: preferences.showCaptureMagnifier, showCoordinates: preferences.showSelectionCoordinates)
     }
 
     func toggleDesktopIcons() {

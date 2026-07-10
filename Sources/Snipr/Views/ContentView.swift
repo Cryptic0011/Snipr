@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Brand palette shared with the landing page: charcoal + brass, from the mark.
-private enum Brand {
+enum Brand {
     static let brass = Color(red: 0.804, green: 0.667, blue: 0.329)      // #cdaa54
     static let brassDeep = Color(red: 0.35, green: 0.27, blue: 0.12)
     static let charcoal = Color(red: 0.149, green: 0.149, blue: 0.141)   // #262624

@@ -62,7 +62,7 @@ final class CoordinatorWorkflowEnvironment: WorkflowEnvironment {
                 continuation.resume(returning: nil)
                 coordinator?.rewireOverlayHandlers()
             }
-            coordinator.overlayPresenter.showCaptureOverlays(mode: .screenshot, showMagnifier: preferences.showCaptureMagnifier)
+            coordinator.overlayPresenter.showCaptureOverlays(mode: .screenshot, showMagnifier: preferences.showCaptureMagnifier, showCoordinates: preferences.showSelectionCoordinates)
         }
     }
 

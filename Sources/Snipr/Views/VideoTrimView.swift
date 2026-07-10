@@ -50,35 +50,13 @@ struct VideoTrimView: View {
                         .font(.caption.monospacedDigit())
                         .frame(width: 56, alignment: .leading)
 
-                    GeometryReader { proxy in
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color.gray.opacity(0.32))
-                            Rectangle()
-                                .fill(Color.accentColor.opacity(0.55))
-                                .frame(width: max(2, CGFloat((trimEnd - trimStart) / duration) * proxy.size.width))
-                                .offset(x: CGFloat(trimStart / duration) * proxy.size.width)
-                                .clipShape(Capsule())
-                        }
+                    TrimBar(duration: duration, trimStart: $trimStart, trimEnd: $trimEnd) { time in
+                        seek(to: time)
                     }
-                    .frame(height: 12)
 
                     Text(format(trimEnd))
                         .font(.caption.monospacedDigit())
                         .frame(width: 56, alignment: .trailing)
-                }
-
-                HStack {
-                    Slider(value: $trimStart, in: 0...max(duration, 0.01), onEditingChanged: { _ in
-                        trimStart = min(trimStart, max(0, trimEnd - 0.1))
-                        seek(to: trimStart)
-                    })
-                    .frame(maxWidth: .infinity)
-                    Slider(value: $trimEnd, in: 0...max(duration, 0.01), onEditingChanged: { _ in
-                        trimEnd = max(trimEnd, min(duration, trimStart + 0.1))
-                        seek(to: trimEnd)
-                    })
-                    .frame(maxWidth: .infinity)
                 }
 
                 HStack {
@@ -123,14 +101,20 @@ struct VideoTrimView: View {
 
     private func seek(to seconds: TimeInterval) {
         guard let player else { return }
-        player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
+        // Zero tolerance so dragging a handle shows the exact frame at that
+        // time, not the nearest keyframe.
+        player.seek(
+            to: CMTime(seconds: seconds, preferredTimescale: 600),
+            toleranceBefore: .zero,
+            toleranceAfter: .zero
+        )
     }
 
     private func format(_ seconds: TimeInterval) -> String {
-        let total = Int(seconds.rounded())
+        let total = Int(seconds)
         let mm = total / 60
         let ss = total % 60
-        let fr = Int(((seconds - Double(total)) * 30).rounded())
+        let fr = min(29, Int((seconds - Double(total)) * 30))
         return String(format: "%02d:%02d.%02d", mm, ss, fr)
     }
 
@@ -154,6 +138,84 @@ struct VideoTrimView: View {
         } catch {
             exportError = error.localizedDescription
         }
+    }
+}
+
+/// QuickTime-style trim control: one timeline with the kept range highlighted
+/// and a draggable handle at each end. Dragging anywhere moves the nearer
+/// handle and scrubs the player to it.
+private struct TrimBar: View {
+    let duration: TimeInterval
+    @Binding var trimStart: TimeInterval
+    @Binding var trimEnd: TimeInterval
+    var onScrub: (TimeInterval) -> Void
+
+    private enum Handle { case start, end }
+    @State private var activeHandle: Handle?
+
+    private static let handleWidth: CGFloat = 8
+    private static let minGap: TimeInterval = 0.1
+
+    var body: some View {
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            let startX = x(for: trimStart, width: width)
+            let endX = x(for: trimEnd, width: width)
+
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.gray.opacity(0.32))
+                    .frame(height: 8)
+
+                Rectangle()
+                    .fill(Color.accentColor.opacity(0.45))
+                    .frame(width: max(2, endX - startX), height: 8)
+                    .offset(x: startX)
+
+                handle(at: startX, active: activeHandle == .start)
+                handle(at: endX, active: activeHandle == .end)
+            }
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        let t = time(at: value.location.x, width: width)
+                        if activeHandle == nil {
+                            activeHandle = abs(t - trimStart) <= abs(t - trimEnd) ? .start : .end
+                        }
+                        switch activeHandle {
+                        case .start:
+                            trimStart = min(max(0, t), trimEnd - Self.minGap)
+                            onScrub(trimStart)
+                        case .end:
+                            trimEnd = max(min(duration, t), trimStart + Self.minGap)
+                            onScrub(trimEnd)
+                        case nil:
+                            break
+                        }
+                    }
+                    .onEnded { _ in activeHandle = nil }
+            )
+        }
+        .frame(height: 24)
+    }
+
+    private func handle(at x: CGFloat, active: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 3)
+            .fill(active ? Color.accentColor : Color.white)
+            .frame(width: Self.handleWidth, height: 24)
+            .shadow(radius: 1)
+            .offset(x: x - Self.handleWidth / 2)
+    }
+
+    private func x(for time: TimeInterval, width: CGFloat) -> CGFloat {
+        CGFloat(time / duration) * width
+    }
+
+    private func time(at x: CGFloat, width: CGFloat) -> TimeInterval {
+        guard width > 0 else { return 0 }
+        return min(max(0, TimeInterval(x / width) * duration), duration)
     }
 }
 

@@ -104,7 +104,317 @@ final class VisionStitchEngineTests: XCTestCase {
         XCTAssertLessThan(stitched.height, frameCount * frameHeight - chrome)
     }
 
+    /// Height assertions alone can pass while the content is scrambled. This
+    /// fixture reconstructs a reference gradient from overlapping slices and
+    /// verifies the *pixels*: rows must stay monotonically ordered and span
+    /// the full reference range, i.e. no repeated, dropped, or reordered
+    /// content at the seams.
+    func testStitchReconstructsReferenceContentPixels() throws {
+        let width = 64
+        let frameHeight = 100
+        let scrollStep = 30      // 70% overlap between consecutive frames
+        let frameCount = 5
+
+        let totalHeight = frameHeight + scrollStep * (frameCount - 1)
+        let reference = makeGradient(width: width, height: totalHeight)
+        let frames = try (0..<frameCount).map { i in
+            try crop(reference, rect: CGRect(x: 0, y: i * scrollStep, width: width, height: frameHeight))
+        }
+
+        let engine = VisionStitchEngine(minOverlapFraction: 0.10, mismatchThreshold: 6.0)
+        let stitched = try XCTUnwrap(try engine.stitch(frames: frames))
+        let rows = try XCTUnwrap(grayscaleRowMeans(stitched))
+
+        // Content integrity: the gradient must come back out as a gradient.
+        // Monotonic rows prove nothing was duplicated or reordered at a seam;
+        // matching endpoints prove nothing was cropped off either edge. The
+        // gradient's direction depends on CG's bottom-left origin, so take
+        // the expected ordering from the reference itself.
+        let tolerance = 6.0
+        let referenceRows = try XCTUnwrap(grayscaleRowMeans(reference))
+        let descending = referenceRows.first! > referenceRows.last!
+        for pair in zip(rows, rows.dropFirst()) {
+            if descending {
+                XCTAssertGreaterThanOrEqual(pair.0 + tolerance, pair.1, "rows out of order — seam duplicated or misaligned content")
+            } else {
+                XCTAssertLessThanOrEqual(pair.0, pair.1 + tolerance, "rows out of order — seam duplicated or misaligned content")
+            }
+        }
+        XCTAssertEqual(rows.first!, referenceRows.first!, accuracy: tolerance)
+        XCTAssertEqual(rows.last!, referenceRows.last!, accuracy: tolerance)
+    }
+
+    /// Regression for the field-reported "shredded stripes" bug: a rejected
+    /// pair (scroll jump) breaks the alignment chain, because the overlap of
+    /// the pair *after* the gap was measured against the dropped frame. The
+    /// engine must stitch the tallest consecutively-aligned run instead of
+    /// pretending the chain survived the gap.
+    func testRejectedPairMidCaptureDoesNotShearAlignment() throws {
+        let width = 64
+        let frameHeight = 100
+
+        let reference = makeGradient(width: width, height: 420)
+        // Two clean runs separated by a jump: [0,30,60] then [230,260,290,320].
+        let offsets = [0, 30, 60, 230, 260, 290, 320]
+        let frames = try offsets.map { y in
+            try crop(reference, rect: CGRect(x: 0, y: y, width: width, height: frameHeight))
+        }
+
+        let engine = VisionStitchEngine(minOverlapFraction: 0.10, mismatchThreshold: 6.0)
+        let stitched = try XCTUnwrap(try engine.stitch(frames: frames))
+
+        // Tallest run is the second one: 100 + 3 × 30 = 190 rows.
+        XCTAssertEqual(stitched.width, width)
+        XCTAssertGreaterThanOrEqual(stitched.height, 185)
+        XCTAssertLessThanOrEqual(stitched.height, 195)
+
+        // No shear: the output must be a continuous slice of the gradient —
+        // adjacent row means may differ by at most a few gray levels. The
+        // pre-fix chain bug splices distant document regions together, which
+        // shows up as a ~60-gray-level cliff at the bad seam.
+        let rows = try XCTUnwrap(grayscaleRowMeans(stitched))
+        for (index, pair) in zip(rows, rows.dropFirst()).enumerated() {
+            XCTAssertLessThanOrEqual(
+                abs(pair.0 - pair.1), 4.0,
+                "content cliff at row \(index) — alignment sheared across a rejected pair"
+            )
+        }
+    }
+
+    /// Regression for the "over-claimed overlap" field bug: on low-signal
+    /// content (sparse text on a flat background) *every* overlap candidate
+    /// passes the error threshold, and taking the first one from the top
+    /// collapses each frame to a sliver. The true alignment is the error
+    /// *minimum* — an exact pixel match — and must win.
+    func testSparseContentDoesNotOverClaimOverlap() throws {
+        let width = 400
+        let frameHeight = 300
+        let scrollStep = 30
+        let frameCount = 6
+
+        let docHeight = frameHeight + scrollStep * (frameCount - 1)
+        let doc = makeSparseDocument(width: width, height: docHeight, background: 0.05, ink: 0.7)
+        let frames = try (0..<frameCount).map { i in
+            try crop(doc, rect: CGRect(x: 0, y: i * scrollStep, width: width, height: frameHeight))
+        }
+
+        let engine = VisionStitchEngine()
+        let stitched = try XCTUnwrap(try engine.stitch(frames: frames))
+
+        // Correct: full document reconstructed (450px). Over-claim collapses
+        // to barely more than one frame (~305px).
+        let expected = docHeight
+        XCTAssertGreaterThanOrEqual(stitched.height, expected - 10, "overlap over-claimed — content collapsed to slivers")
+        XCTAssertLessThanOrEqual(stitched.height, expected + 10)
+    }
+
+    /// Regression for the dark-theme scrolling capture field report: static
+    /// chrome over near-black sparse content. The loose static-row threshold
+    /// read the *scrolling* content as static (a moved text line barely nudges
+    /// the row mean), band detection gave up, and the full-frame path stacked
+    /// chrome slivers. Static detection must demand pixel-identical rows.
+    func testDarkThemeSparseContentStitchesTall() throws {
+        let width = 400
+        let frameHeight = 300
+        let chrome = 40
+        let scrollStep = 30
+        let frameCount = 6
+
+        let contentVisible = frameHeight - chrome
+        let docHeight = contentVisible + scrollStep * (frameCount - 1)
+        // Left-aligned dashes (like a real table) deny band detection the
+        // easy signal of text at shifting x positions, and aperiodic chrome
+        // denies the full-frame path an accidental chrome-on-chrome match.
+        let doc = makeSparseDocument(width: width, height: docHeight, background: 0.05, ink: 0.7, fixedDashX: 20)
+        let chromeBand = makeAperiodicStripes(width: width, height: chrome)
+        let frames = try (0..<frameCount).map { i in
+            let slice = try crop(doc, rect: CGRect(x: 0, y: i * scrollStep, width: width, height: contentVisible))
+            return composeTopLeft([chromeBand, slice], width: width)
+        }
+
+        let engine = VisionStitchEngine()
+        let stitched = try XCTUnwrap(try engine.stitch(frames: frames))
+
+        // Correct: chrome once + the full document. The field failure mode
+        // produced ~one frame's height of stacked chrome slivers.
+        let expected = chrome + docHeight
+        XCTAssertGreaterThanOrEqual(stitched.height, expected - 12, "dark sparse content collapsed — chrome sliver stacking")
+        XCTAssertLessThanOrEqual(stitched.height, expected + 12)
+    }
+
+    /// A static app sidebar doesn't scroll with the content. It stays in the
+    /// output at full window width (user preference), but must be excluded
+    /// from the row correlation — its static pixels otherwise poison the
+    /// alignment into rejecting every pair.
+    func testStaticSidebarStaysInOutputWithoutPoisoningAlignment() throws {
+        let width = 400
+        let sidebar = 80
+        let frameHeight = 300
+        let scrollStep = 30
+        let frameCount = 5
+
+        let docHeight = frameHeight + scrollStep * (frameCount - 1)
+        let doc = makeGradient(width: width - sidebar, height: docHeight)
+        let sidebarBand = makeAperiodicStripes(width: sidebar, height: frameHeight)
+        let frames = try (0..<frameCount).map { i -> CGImage in
+            let slice = try crop(doc, rect: CGRect(x: 0, y: i * scrollStep, width: width - sidebar, height: frameHeight))
+            return composeLeftToRight([sidebarBand, slice], height: frameHeight)
+        }
+
+        let engine = VisionStitchEngine()
+        let stitched = try XCTUnwrap(try engine.stitch(frames: frames))
+
+        // Full window width kept (sidebar included), content reconstructed
+        // tall — proving alignment came from the content columns.
+        XCTAssertEqual(stitched.width, width, "sidebar must stay in the output")
+        XCTAssertGreaterThanOrEqual(stitched.height, docHeight - 10)
+        XCTAssertLessThanOrEqual(stitched.height, docHeight + 10)
+    }
+
+    /// A scrollbar thumb moves *against* the content, so it can't be stitched
+    /// — left in, it smears (field report). The thumb-bearing right-edge
+    /// strip must be shaved from the output.
+    func testScrollbarThumbStripIsShaved() throws {
+        let width = 400
+        let track = 16
+        let frameHeight = 300
+        let scrollStep = 30
+        let frameCount = 5
+
+        let docHeight = frameHeight + scrollStep * (frameCount - 1)
+        let doc = makeGradient(width: width - track, height: docHeight)
+        let frames = try (0..<frameCount).map { i -> CGImage in
+            let slice = try crop(doc, rect: CGRect(x: 0, y: i * scrollStep, width: width - track, height: frameHeight))
+            let trackBand = makeScrollbarTrack(width: track, height: frameHeight, thumbTop: 10 + i * scrollStep, thumbHeight: 40)
+            return composeLeftToRight([slice, trackBand], height: frameHeight)
+        }
+
+        let engine = VisionStitchEngine()
+        let stitched = try XCTUnwrap(try engine.stitch(frames: frames))
+
+        XCTAssertEqual(stitched.width, width - track, "scrollbar strip not shaved — the thumb would smear")
+        XCTAssertGreaterThanOrEqual(stitched.height, docHeight - 10)
+        XCTAssertLessThanOrEqual(stitched.height, docHeight + 10)
+    }
+
     // MARK: - Helpers
+
+    /// Place images side by side, left to right.
+    private func composeLeftToRight(_ images: [CGImage], height: Int) -> CGImage {
+        let totalWidth = images.reduce(0) { $0 + $1.width }
+        let context = CGContext(
+            data: nil,
+            width: totalWidth,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        var x = 0
+        for image in images {
+            context.draw(image, in: CGRect(x: x, y: 0, width: image.width, height: image.height))
+            x += image.width
+        }
+        return context.makeImage()!
+    }
+
+    /// Scrollbar-like strip: flat track with a darker thumb block at a given
+    /// vertical position.
+    private func makeScrollbarTrack(width: Int, height: Int, thumbTop: Int, thumbHeight: Int) -> CGImage {
+        let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        context.setFillColor(red: 0.15, green: 0.15, blue: 0.15, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        context.setFillColor(red: 0.6, green: 0.6, blue: 0.6, alpha: 1)
+        // Visual thumbTop → CG bottom-left flip.
+        context.fill(CGRect(x: 2, y: height - thumbTop - thumbHeight, width: width - 4, height: thumbHeight))
+        return context.makeImage()!
+    }
+
+    /// Near-flat "document": `background` everywhere, with a thin 3-row text
+    /// dash every 40 rows covering ~3% of the width — misaligned rows differ
+    /// by ~5 mean gray levels, under the correlation threshold of 6, which is
+    /// what makes low-signal content adversarial.
+    private func makeSparseDocument(width: Int, height: Int, background: CGFloat, ink: CGFloat, fixedDashX: Int? = nil) -> CGImage {
+        let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        context.setFillColor(red: background, green: background, blue: background, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        let dashWidth = width * 3 / 100
+        var lineIndex = 0
+        for y in stride(from: 8, to: height - 3, by: 40) {
+            let x = fixedDashX ?? (lineIndex * 53) % (width - dashWidth)
+            context.setFillColor(red: ink, green: ink, blue: ink, alpha: 1)
+            context.fill(CGRect(x: x, y: y, width: dashWidth, height: 3))
+            lineIndex += 1
+        }
+        return context.makeImage()!
+    }
+
+    /// Horizontal stripes with irregular heights and grays — static "chrome"
+    /// that can't accidentally self-align at a wrong offset.
+    private func makeAperiodicStripes(width: Int, height: Int) -> CGImage {
+        let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        var y = 0
+        var index = 0
+        while y < height {
+            let stripeHeight = 3 + (index * 7) % 9
+            let gray = 0.3 + CGFloat((index * 31) % 60) / 100.0
+            context.setFillColor(red: gray, green: gray, blue: gray, alpha: 1)
+            context.fill(CGRect(x: 0, y: y, width: width, height: stripeHeight))
+            y += stripeHeight
+            index += 1
+        }
+        return context.makeImage()!
+    }
+
+    /// Mean gray value of each row, top row first.
+    private func grayscaleRowMeans(_ image: CGImage) -> [Double]? {
+        let width = image.width
+        let height = image.height
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        let ok = pixels.withUnsafeMutableBufferPointer { buffer -> Bool in
+            guard let context = CGContext(
+                data: buffer.baseAddress,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: width,
+                space: CGColorSpaceCreateDeviceGray(),
+                bitmapInfo: CGImageAlphaInfo.none.rawValue
+            ) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard ok else { return nil }
+        return (0..<height).map { y in
+            let row = pixels[(y * width)..<((y + 1) * width)]
+            return row.reduce(0.0) { $0 + Double($1) } / Double(width)
+        }
+    }
 
     /// Stack images top-to-bottom (first = top) into one CGImage.
     private func composeTopLeft(_ images: [CGImage], width: Int) -> CGImage {

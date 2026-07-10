@@ -6,8 +6,25 @@ final class SniprCommandTests: XCTestCase {
     func testAllCommandsMatchMVPOrder() {
         XCTAssertEqual(
             SniprCommand.all.map(\.id),
-            [.captureToolbar, .captureArea, .recordArea, .ocrSelection, .showOCRHistory, .pickColor, .scanQR, .toggleDesktopIcons, .scrollingCapture, .openHistory, .clearStack, .openSettings, .quit]
+            [.captureToolbar, .captureArea, .captureWindow, .recordArea, .ocrSelection, .showOCRHistory, .pickColor, .scanQR, .toggleDesktopIcons, .scrollingCapture, .openHistory, .clearStack, .openSettings, .quit]
         )
+    }
+
+    func testURLSchemeParsesRawValueDashedAndAliasForms() throws {
+        XCTAssertEqual(SniprCommandID(url: try XCTUnwrap(URL(string: "snipr://captureArea"))), .captureArea)
+        XCTAssertEqual(SniprCommandID(url: try XCTUnwrap(URL(string: "snipr://capture-area"))), .captureArea)
+        XCTAssertEqual(SniprCommandID(url: try XCTUnwrap(URL(string: "snipr://SCROLLING_CAPTURE"))), .scrollingCapture)
+        XCTAssertEqual(SniprCommandID(url: try XCTUnwrap(URL(string: "snipr://capture"))), .captureArea)
+        XCTAssertEqual(SniprCommandID(url: try XCTUnwrap(URL(string: "snipr://record"))), .recordArea)
+        XCTAssertEqual(SniprCommandID(url: try XCTUnwrap(URL(string: "snipr://ocr"))), .ocrSelection)
+        // No-authority form (`snipr:capture`) puts the token in the path.
+        XCTAssertEqual(SniprCommandID(url: try XCTUnwrap(URL(string: "snipr:capture"))), .captureArea)
+    }
+
+    func testURLSchemeRejectsWrongSchemeAndUnknownCommands() throws {
+        XCTAssertNil(SniprCommandID(url: try XCTUnwrap(URL(string: "https://capture-area"))))
+        XCTAssertNil(SniprCommandID(url: try XCTUnwrap(URL(string: "snipr://make-coffee"))))
+        XCTAssertNil(SniprCommandID(url: try XCTUnwrap(URL(string: "snipr://"))))
     }
 
     func testBlankSearchReturnsAllCommands() {
@@ -15,7 +32,7 @@ final class SniprCommandTests: XCTestCase {
     }
 
     func testSearchMatchesTitleAndSubtitleTokens() {
-        XCTAssertEqual(SniprCommand.filtered(by: "capture").map(\.id), [.captureToolbar, .captureArea, .scrollingCapture])
+        XCTAssertEqual(SniprCommand.filtered(by: "capture").map(\.id), [.captureToolbar, .captureArea, .captureWindow, .scrollingCapture])
         XCTAssertEqual(SniprCommand.filtered(by: "toolbar").map(\.id), [.captureToolbar])
         XCTAssertEqual(SniprCommand.filtered(by: "record").map(\.id), [.recordArea])
         XCTAssertEqual(SniprCommand.filtered(by: "scroll stitch").map(\.id), [.scrollingCapture])

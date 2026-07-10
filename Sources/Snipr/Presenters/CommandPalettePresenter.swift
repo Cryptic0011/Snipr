@@ -39,7 +39,11 @@ final class CommandPalettePresenter {
         panel.hasShadow = true
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
+        panel.titlebarSeparatorStyle = .none
         panel.isMovableByWindowBackground = true
+        // ignoresSafeArea: NSHostingView otherwise insets the content below
+        // the (transparent) titlebar, leaving a backdrop band above the card
+        // whose edge reads as a line across the palette.
         panel.contentView = NSHostingView(
             rootView: CommandPaletteView(
                 hotKeyBindings: coordinator.preferences.hotKeyBindings,
@@ -52,6 +56,7 @@ final class CommandPalettePresenter {
                     coordinator?.runWorkflow(workflow)
                 }
             )
+            .ignoresSafeArea()
         )
 
         if let screen = NSScreen.main {

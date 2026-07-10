@@ -22,6 +22,11 @@ struct CaptureSettingsTab: View {
                     set: { model.preferences.showCaptureMagnifier = $0 }
                 ))
 
+                Toggle("Show size and coordinates while selecting", isOn: Binding(
+                    get: { model.preferences.showSelectionCoordinates },
+                    set: { model.preferences.showSelectionCoordinates = $0 }
+                ))
+
                 Toggle("Freeze screen while selecting", isOn: Binding(
                     get: { model.preferences.freezeScreenDuringSelection },
                     set: { model.preferences.freezeScreenDuringSelection = $0 }

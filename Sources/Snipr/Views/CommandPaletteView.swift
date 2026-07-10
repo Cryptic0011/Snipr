@@ -43,7 +43,8 @@ struct CommandPaletteView: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Brand.brass)
 
                 TextField("Search Snipr commands", text: $query)
                     .textFieldStyle(.plain)
@@ -55,7 +56,7 @@ struct CommandPaletteView: View {
             .padding(18)
 
             Divider()
-                .overlay(Color.white.opacity(0.08))
+                .overlay(Brand.brass.opacity(0.18))
 
             if commands.isEmpty && filteredWorkflows.isEmpty {
                 ContentUnavailableView("No Commands", systemImage: "command", description: Text("Try a different search."))
@@ -63,7 +64,7 @@ struct CommandPaletteView: View {
             } else {
                 List(selection: $selectedCommandID) {
                     if !commands.isEmpty {
-                        Section("Commands") {
+                        Section {
                             ForEach(commands) { command in
                                 CommandPaletteRow(command: command)
                                     .tag(command.id)
@@ -72,11 +73,13 @@ struct CommandPaletteView: View {
                                         onExecute(command)
                                     }
                             }
+                        } header: {
+                            PaletteSectionHeader(title: "Commands")
                         }
                     }
 
                     if !filteredWorkflows.isEmpty {
-                        Section("Workflows") {
+                        Section {
                             ForEach(filteredWorkflows) { workflow in
                                 WorkflowPaletteRow(workflow: workflow)
                                     .contentShape(Rectangle())
@@ -84,21 +87,40 @@ struct CommandPaletteView: View {
                                         onExecuteWorkflow(workflow)
                                     }
                             }
+                        } header: {
+                            PaletteSectionHeader(title: "Workflows")
                         }
                     }
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
+                .tint(Brand.brass.opacity(0.22))
             }
         }
         .foregroundStyle(.white)
         .background {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(red: 0.08, green: 0.08, blue: 0.09).opacity(0.96))
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Brand.charcoal.opacity(0.97))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                    LinearGradient(
+                        colors: [Brand.brass.opacity(0.10), .clear, Brand.brassDeep.opacity(0.10)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(
+                            LinearGradient(
+                                colors: [Brand.brass.opacity(0.45), Brand.brass.opacity(0.14)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 1
+                        )
+                )
+                .shadow(color: .black.opacity(0.35), radius: 24, y: 8)
         }
         .frame(width: 680, height: 420)
         .onSubmit {
@@ -109,15 +131,28 @@ struct CommandPaletteView: View {
     }
 }
 
+private struct PaletteSectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title.uppercased())
+            .font(.system(size: 10, weight: .bold))
+            .kerning(1.2)
+            .foregroundStyle(Brand.brass.opacity(0.65))
+    }
+}
+
 private struct WorkflowPaletteRow: View {
     let workflow: Workflow
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "rectangle.stack.fill.badge.plus")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(.purple)
-                .frame(width: 24)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Brand.brass)
+                .frame(width: 30, height: 30)
+                .background(Brand.brassDeep.opacity(0.35), in: RoundedRectangle(cornerRadius: 7))
+                .overlay(RoundedRectangle(cornerRadius: 7).stroke(Brand.brass.opacity(0.18)))
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(workflow.title)
@@ -133,10 +168,11 @@ private struct WorkflowPaletteRow: View {
 
             Text("Workflow")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.45))
+                .foregroundStyle(Brand.brass.opacity(0.85))
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
-                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+                .background(Brand.brass.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Brand.brass.opacity(0.16)))
         }
         .padding(.vertical, 8)
     }
@@ -148,9 +184,11 @@ private struct CommandPaletteRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: command.systemImage)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(.cyan)
-                .frame(width: 24)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Brand.brass)
+                .frame(width: 30, height: 30)
+                .background(Brand.brass.opacity(0.10), in: RoundedRectangle(cornerRadius: 7))
+                .overlay(RoundedRectangle(cornerRadius: 7).stroke(Brand.brass.opacity(0.18)))
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(command.title)
@@ -165,11 +203,12 @@ private struct CommandPaletteRow: View {
             Spacer()
 
             Text(command.shortcut)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.45))
+                .font(.system(.caption, design: .monospaced).weight(.semibold))
+                .foregroundStyle(Brand.brass.opacity(0.85))
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
-                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+                .background(Brand.brass.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Brand.brass.opacity(0.16)))
         }
         .padding(.vertical, 8)
     }

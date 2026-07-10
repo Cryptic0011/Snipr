@@ -11,14 +11,17 @@
   <a href="https://github.com/Cryptic0011/Snipr/releases/latest"><strong>Download</strong></a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/Cryptic0011/Snipr/actions/workflows/ci.yml"><img src="https://github.com/Cryptic0011/Snipr/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+</p>
+
 ---
 
-Snipr is not trying to be the best screenshot tool on the Mac. It's an
-**open-source, forkable alternative to the paid ones** — if a tool like
-CleanShot X does everything you want, buy it. Snipr is for people who want the
-core loop (capture → annotate → OCR → ship) without a subscription, an
-account, or a cloud, and who want to be able to read, change, and rebuild the
-tool they run on their screen.
+Snipr is the **open-source screenshot tool for macOS** — the full
+capture → annotate → OCR → ship loop with no subscription, no account, and
+no cloud. Everything runs and stays on your machine, and because it's plain
+Swift under MIT, you can read, change, and rebuild the tool you run on your
+screen.
 
 <p align="center">
   <img src="site/dashboard.png" width="640" alt="The Snipr dashboard: quick capture actions on the left, recent captures on the right.">
@@ -56,6 +59,24 @@ Grab the DMG from [the latest release](https://github.com/Cryptic0011/Snipr/rele
 (or the [website](https://cryptic0011.github.io/Snipr/)), drag Snipr to
 Applications, and grant Screen Recording permission on first capture.
 Requires macOS 14+ (Apple Silicon).
+
+## Automation
+
+Every command is scriptable through the `snipr://` URL scheme — from the
+terminal, Apple Shortcuts, Raycast, or anything that can open a URL:
+
+```bash
+open "snipr://capture"             # area capture
+open "snipr://record"              # record an area
+open "snipr://ocr"                 # OCR a selection to the clipboard
+open "snipr://scrolling-capture"   # start a scrolling capture
+open "snipr://pick-color"
+```
+
+Any command palette action works by its id: `capture-area`, `record-area`,
+`capture-toolbar`, `ocr-selection`, `show-ocr-history`, `pick-color`,
+`scan-qr`, `scrolling-capture`, `toggle-desktop-icons`, `open-history`,
+`clear-stack`, `open-settings`, `quit`.
 
 ## Build from source
 
