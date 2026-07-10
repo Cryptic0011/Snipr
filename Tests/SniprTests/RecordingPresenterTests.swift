@@ -169,6 +169,10 @@ final class RecordingPresenterTests: XCTestCase {
         let screen = try XCTUnwrap(NSScreen.main)
         presenter.start(displayID: CGMainDisplayID(), screen: screen, rect: CGRect(x: 0, y: 0, width: 320, height: 240))
         try await waitFor(timeout: 2) { engine.startCalls.count == 1 }
+        // The bake branch only runs when the 60 Hz sampler captured at
+        // least one point; wait for a tick so the precondition is
+        // deterministic instead of racing the timer.
+        try await waitFor(timeout: 2) { presenter.capturedCursorSampleCount >= 1 }
 
         presenter.stop()
         await fulfillment(of: [finished], timeout: 10)

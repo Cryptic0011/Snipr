@@ -19,6 +19,19 @@ final class RecordingPresenter {
     private let webcamBubble = WebcamBubblePresenter()
     private let cursorSampler = CursorSampler()
     private var activeRecordingRegion: NSRect?   // global Cocoa coords
+    /// True while `stop()`'s Task is still finalizing. `isRecording` flips
+    /// false as soon as the engine stops, but the cursor bake can take
+    /// seconds afterwards and its tail clears `activeRecordingRegion` /
+    /// `activeRecordingDisplayID` — `start()` gates on this so a rapid
+    /// re-start can't have that state silently clobbered.
+    private var isFinalizingRecording = false
+
+    /// Test seam: how many cursor positions the sampler has captured so
+    /// far. Lets tests wait for the 60 Hz timer to actually tick before
+    /// stopping, making bake-path preconditions deterministic.
+    var capturedCursorSampleCount: Int {
+        cursorSampler.samples.count
+    }
 
     /// Called when a new recording lands in the capture store so the
     /// coordinator can reveal the stack.
@@ -48,7 +61,7 @@ final class RecordingPresenter {
     }
 
     func start(displayID: CGDirectDisplayID, screen: NSScreen, rect: CGRect) {
-        guard !recordingEngine.isRecording else {
+        guard !recordingEngine.isRecording, !isFinalizingRecording else {
             return
         }
 
@@ -101,6 +114,9 @@ final class RecordingPresenter {
             guard let self else {
                 return
             }
+
+            self.isFinalizingRecording = true
+            defer { self.isFinalizingRecording = false }
 
             do {
                 let recordedVideo = try await self.recordingEngine.stop()
@@ -176,7 +192,14 @@ final class RecordingPresenter {
             trimStart: nil,
             trimEnd: nil
         )
-        _ = try FileManager.default.replaceItemAt(video.fileURL, withItemAt: bakedURL)
+        do {
+            _ = try FileManager.default.replaceItemAt(video.fileURL, withItemAt: bakedURL)
+        } catch {
+            // Don't orphan the baked temp file if the atomic swap fails —
+            // the raw recording at the original URL is what survives.
+            try? FileManager.default.removeItem(at: bakedURL)
+            throw error
+        }
         return RecordedVideo(fileURL: video.fileURL, pixelSize: video.pixelSize, duration: video.duration)
     }
 
