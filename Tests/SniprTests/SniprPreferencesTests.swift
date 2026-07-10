@@ -152,6 +152,27 @@ final class SniprPreferencesTests: XCTestCase {
         XCTAssertFalse(reloaded.binding(for: .scrollingCapture).isEnabled)
     }
 
+    @MainActor
+    func testCursorPreferencesDefaultsAndPersistence() throws {
+        let (defaults, suiteName) = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let prefs = SniprPreferences(defaults: defaults)
+        XCTAssertFalse(prefs.recordingCustomCursor)
+        XCTAssertTrue(prefs.recordingCursorSmoothing)
+        XCTAssertEqual(prefs.recordingCursorScale, 1.5)
+        XCTAssertEqual(prefs.recordingCursorColor, .white)
+
+        prefs.recordingCustomCursor = true
+        prefs.recordingCursorScale = 2.0
+        prefs.recordingCursorColor = .brass
+
+        let reloaded = SniprPreferences(defaults: defaults)
+        XCTAssertTrue(reloaded.recordingCustomCursor)
+        XCTAssertEqual(reloaded.recordingCursorScale, 2.0)
+        XCTAssertEqual(reloaded.recordingCursorColor, .brass)
+    }
+
     private func makeDefaults() throws -> (UserDefaults, String) {
         let suiteName = "SniprPreferencesTests-\(UUID().uuidString)"
         return (try XCTUnwrap(UserDefaults(suiteName: suiteName)), suiteName)
