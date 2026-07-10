@@ -86,9 +86,10 @@ final class VideoCompositorIntegrationTests: XCTestCase {
             cursor: nil, trimStart: nil, trimEnd: nil
         )
         let info = try await videoInfo(out)
-        // canvasGeometry: padding = max(48, min(640,360)*0.08 rounded) = 48
-        XCTAssertEqual(info.size.width, 736)   // 640 + 96
-        XCTAssertEqual(info.size.height, 456)  // 360 + 96
+        // ExportStyle().canvas(for:): padding = min(640,360)*0.08 rounded = 29
+        // (honestly proportional — no hidden 48px floor).
+        XCTAssertEqual(info.size.width, 698)   // 640 + 58
+        XCTAssertEqual(info.size.height, 418)  // 360 + 58
         XCTAssertEqual(info.duration, 2.0, accuracy: 0.1)
 
         // Pin the render geometry itself, not just the canvas dimensions.
@@ -97,7 +98,7 @@ final class VideoCompositorIntegrationTests: XCTestCase {
         // decode; sample the source's own re-encoded frame as ground truth
         // rather than hardcoding the pre-encode value, since AVFoundation's
         // color management shifts raw RGB on readback). The video rect is
-        // centered in the 48px padding: x/y in [48, 688]x[48, 408].
+        // centered in the 29px padding: x/y in [29, 669]x[29, 389].
         //
         // Regression this catches: AVVideoCompositionCoreAnimationTool
         // squeezes the renderSize-sized composited frame into videoLayer's
@@ -113,10 +114,42 @@ final class VideoCompositorIntegrationTests: XCTestCase {
         let sourceFrame = try await frameImage(source, at: 1.0)
         let videoColor = pixelColor(sourceFrame, x: 320, y: 180)
         assertPixelColor(frame, x: 10, y: 10, isNear: videoColor, tolerance: 0.15, expectMatch: false)
-        assertPixelColor(frame, x: 368, y: 58, isNear: videoColor, tolerance: 0.15, expectMatch: true)   // top edge, mid
-        assertPixelColor(frame, x: 368, y: 398, isNear: videoColor, tolerance: 0.15, expectMatch: true)  // bottom edge, mid
-        assertPixelColor(frame, x: 58, y: 228, isNear: videoColor, tolerance: 0.15, expectMatch: true)   // left edge, mid
-        assertPixelColor(frame, x: 678, y: 228, isNear: videoColor, tolerance: 0.15, expectMatch: true)  // right edge, mid
+        assertPixelColor(frame, x: 349, y: 39, isNear: videoColor, tolerance: 0.15, expectMatch: true)   // top edge, mid
+        assertPixelColor(frame, x: 349, y: 379, isNear: videoColor, tolerance: 0.15, expectMatch: true)  // bottom edge, mid
+        assertPixelColor(frame, x: 39, y: 209, isNear: videoColor, tolerance: 0.15, expectMatch: true)   // left edge, mid
+        assertPixelColor(frame, x: 659, y: 209, isNear: videoColor, tolerance: 0.15, expectMatch: true)  // right edge, mid
+    }
+
+    func testStyledExportExpandsCanvasToAspectAndFillsWithColor() async throws {
+        let source = try await makeSourceVideo()   // 640×360, 16:9
+        let out = tempDir.appending(path: "styled-square.mov")
+        var style = ExportStyle()
+        style.paddingFraction = 0.10                // padding = 36
+        style.aspect = .square
+        style.cornerRadius = 0                      // corners square: video color reaches its edges
+        _ = try await VideoCompositor.composite(
+            sourceURL: source, outputURL: out,
+            backdrop: .color(RGBA(red: 0, green: 1, blue: 0, alpha: 1)),
+            backdropScreen: nil,
+            cursor: nil, trimStart: nil, trimEnd: nil,
+            style: style
+        )
+        let info = try await videoInfo(out)
+        // padded 712×432 → square expands height to 712 (even-rounded)
+        XCTAssertEqual(info.size.width, 712)
+        XCTAssertEqual(info.size.height, 712)
+
+        // Ground-truth the video's on-disk color from the source's own
+        // re-encoded frame rather than the nominal ~(0.5, 0.3, 0.6) fill
+        // value: AVFoundation's color management shifts raw RGB on H.264
+        // encode/decode (see testBackdropExportProducesPaddedEvenCanvas).
+        let frame = try await frameImage(out, at: 1.0)
+        let sourceFrame = try await frameImage(source, at: 1.0)
+        let videoColor = pixelColor(sourceFrame, x: 320, y: 180)
+        // Expanded region (well above the centered video) is the fill color…
+        assertPixelColor(frame, x: 356, y: 40, isNear: (0, 1, 0), tolerance: 0.15, expectMatch: true)
+        // …and the video's color sits at the frame center.
+        assertPixelColor(frame, x: 356, y: 356, isNear: videoColor, tolerance: 0.15, expectMatch: true)
     }
 
     func testGradientBackdropWithTrim() async throws {
@@ -129,7 +162,9 @@ final class VideoCompositorIntegrationTests: XCTestCase {
         )
         let info = try await videoInfo(out)
         XCTAssertEqual(info.duration, 1.0, accuracy: 0.15)
-        XCTAssertEqual(info.size.width, 736)
+        // ExportStyle() defaults: padding = min(640,360)*0.08 rounded = 29
+        // (honestly proportional — no hidden 48px floor).
+        XCTAssertEqual(info.size.width, 698)
     }
 
     func testCursorOnlyBakeKeepsVideoSize() async throws {

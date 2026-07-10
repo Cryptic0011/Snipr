@@ -62,7 +62,8 @@ enum VideoCompositor {
         backdropScreen: NSScreen?,
         cursor: CursorOverlaySpec?,
         trimStart: TimeInterval?,
-        trimEnd: TimeInterval?
+        trimEnd: TimeInterval?,
+        style: ExportStyle = ExportStyle()
     ) async throws -> URL {
         let asset = AVURLAsset(url: sourceURL)
         guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first else {
@@ -72,13 +73,13 @@ enum VideoCompositor {
         let duration = try await asset.load(.duration)
         let durationSeconds = CMTimeGetSeconds(duration)
 
-        // Canvas: padded per BeautifyRenderer's math when there's a backdrop,
-        // bare video size for a cursor-only bake. Even either way.
+        // Canvas: padded per the export style's aspect/padding when there's a
+        // backdrop, bare video size for a cursor-only bake. Even either way.
         let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
         let padding: CGFloat
         let canvas: CGSize
         if backdrop != nil {
-            let geometry = BeautifyRenderer.canvasGeometry(for: videoSize)
+            let geometry = style.canvas(for: videoSize)
             padding = geometry.padding
             canvas = evenSize(geometry.canvas)
         } else {
@@ -105,22 +106,24 @@ enum VideoCompositor {
 
             // Shadow lives on a container so the video layer itself can clip
             // to rounded corners (shadow + masksToBounds are exclusive).
-            let cornerRadius = 16 * (videoSize.width / max(videoSize.width, 1200))
+            // `style.cornerRadius` is in points; exports are 2× (Retina
+            // captures).
+            let cornerRadius = style.cornerRadius * 2
             let shadowContainer = CALayer()
             shadowContainer.frame = videoRect
             shadowContainer.shadowColor = CGColor(gray: 0, alpha: 1)
-            shadowContainer.shadowOpacity = 0.45
+            shadowContainer.shadowOpacity = Float(style.shadowOpacity)
             shadowContainer.shadowRadius = padding * 0.5
             shadowContainer.shadowOffset = CGSize(width: 0, height: padding * 0.16)
             shadowContainer.shadowPath = CGPath(
                 roundedRect: CGRect(origin: .zero, size: videoRect.size),
-                cornerWidth: max(cornerRadius, 8),
-                cornerHeight: max(cornerRadius, 8),
+                cornerWidth: max(cornerRadius, 0),
+                cornerHeight: max(cornerRadius, 0),
                 transform: nil
             )
 
             videoLayer.frame = CGRect(origin: .zero, size: videoRect.size)
-            videoLayer.cornerRadius = max(cornerRadius, 8)
+            videoLayer.cornerRadius = max(cornerRadius, 0)
             videoLayer.masksToBounds = true
             shadowContainer.addSublayer(videoLayer)
             parentLayer.addSublayer(shadowContainer)
