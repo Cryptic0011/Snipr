@@ -19,9 +19,17 @@ Two OpenScreen-style upgrades for screen recordings:
 - Backdrop is applied **at export time** from the video preview window, never
   baked into the original recording. `nil` backdrop keeps today's lossless
   passthrough trim export.
-- Backdrop choices: the 5 existing `BeautifyStyle` gradients + **Desktop
-  Wallpaper** (current wallpaper via `NSWorkspace.desktopImageURL`, aspect-
-  filled). No bundled image assets.
+- Backdrop choices: the 5 existing `BeautifyStyle` gradients + **11 bundled
+  macOS-style wallpapers** + **Desktop Wallpaper** (current wallpaper via
+  `NSWorkspace.desktopImageURL`, aspect-filled).
+- Bundled wallpapers are curated from the Recordly repo
+  (github.com/webadderallorg/Recordly, AGPLv3): sequoia-blue-orange,
+  sequoia-blue, sonoma-clouds, sonoma-dark, sonoma-evening, sonoma-horizon,
+  sonoma-light, tahoe-dark, tahoe-light, ventura-dark, ventura — 1600×900
+  JPEGs, ~1 MB total, in `Sources/Snipr/Resources/Wallpapers/`. **User
+  accepted the licensing gray area** (AGPL repo → MIT app; several images
+  are Apple's own wallpapers) after it was flagged. Recordly attribution
+  goes in the backdrop picker's footer and README credits.
 - Custom cursor is **baked right after recording stops** (one automatic
   re-encode) so every file in the stack/history is complete and shareable.
   GIF export, trim, and backdrop export operate on the baked file unchanged.
@@ -33,9 +41,15 @@ Two OpenScreen-style upgrades for screen recordings:
 ```swift
 enum VideoBackdrop: Equatable {
     case gradient(BeautifyStyle)
-    case wallpaper   // resolved to an image URL at export time
+    case bundled(String)   // resource name, e.g. "sonoma-horizon"
+    case wallpaper         // user's desktop wallpaper, resolved at export
 }
 ```
+
+Bundled images load through the `SniprAssets` pattern (Bundle.main → 
+Bundle.module), extended for `.jpg`. The app-bundle build script
+(`script/build_and_run.sh`) currently copies only `Resources/*.png`; it
+must also copy `Resources/Wallpapers/*.jpg`.
 
 ### 2. `VideoCompositor` (Support)
 
@@ -90,8 +104,9 @@ toggle is off, with a footnote that it applies to region/screen recordings.
 
 ### 5. UI — video preview (`VideoTrimView`)
 
-- Background `Menu` + `Picker` identical in style to the screenshot editor's
-  (None / 5 gradients / Desktop Wallpaper).
+- Background `Menu` + `Picker` identical in style to the screenshot editor's,
+  grouped: None / Gradients (5) / Wallpapers (11 bundled) / Desktop
+  Wallpaper. Footer line credits Recordly for the bundled set.
 - Choosing a backdrop shows it behind the player as a live approximation
   (same trick as `PreviewWindowView`).
 - Export button: backdrop selected → `VideoCompositor` export (`.mp4`-capable,
@@ -117,7 +132,6 @@ toggle is off, with a footnote that it applies to region/screen recordings.
 ## Out of scope (deliberate)
 
 - Padding/corner/shadow knobs (screenshot Beautify has none either).
-- Bundled wallpaper images.
 - Custom cursor for window-mode recordings.
 - Click-highlight rings on the synthetic cursor (the live ripple overlay
   feature already exists; can composite later if wanted).
