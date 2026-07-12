@@ -109,12 +109,17 @@ enum VideoCompositor {
             // `style.cornerRadius` is in points; exports are 2× (Retina
             // captures).
             let cornerRadius = style.cornerRadius * 2
+            // Shadow scale is derived from padding, but at padding 0 a
+            // non-auto aspect can still leave plenty of backdrop showing
+            // around the video — floor it to a fraction of the video size so
+            // the shadow stays visible instead of silently disappearing.
+            let shadowScale = max(padding, min(videoSize.width, videoSize.height) * 0.04)
             let shadowContainer = CALayer()
             shadowContainer.frame = videoRect
             shadowContainer.shadowColor = CGColor(gray: 0, alpha: 1)
             shadowContainer.shadowOpacity = Float(style.shadowOpacity)
-            shadowContainer.shadowRadius = padding * 0.5
-            shadowContainer.shadowOffset = CGSize(width: 0, height: padding * 0.16)
+            shadowContainer.shadowRadius = shadowScale * 0.5
+            shadowContainer.shadowOffset = CGSize(width: 0, height: shadowScale * 0.16)
             shadowContainer.shadowPath = CGPath(
                 roundedRect: CGRect(origin: .zero, size: videoRect.size),
                 cornerWidth: max(cornerRadius, 0),
@@ -233,7 +238,7 @@ enum VideoCompositor {
                 layer.contentsGravity = .resizeAspectFill
                 layer.masksToBounds = true
             } else {
-                // Wallpaper unreadable — graphite gradient fallback (spec).
+                // Wallpaper or custom image unreadable — graphite gradient fallback (spec).
                 return backdropLayer(for: .gradient(.graphite), screen: nil, canvas: canvas)
             }
             return layer

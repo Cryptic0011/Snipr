@@ -51,7 +51,10 @@ struct VideoTrimView: View {
             await loadDuration()
         }
         .onChange(of: style) { _, newValue in newValue.save() }
-        .onChange(of: backdrop) { _, newValue in VideoBackdrop.saveSelection(newValue) }
+        .onChange(of: backdrop) { _, newValue in
+            VideoBackdrop.saveSelection(newValue)
+            if case .customImage = newValue {} else { customImageName = nil }
+        }
     }
 
     private var videoAspect: CGFloat {
@@ -72,7 +75,7 @@ struct VideoTrimView: View {
             if let image = backdrop?.resolveImage(for: nil) {
                 Image(nsImage: image).resizable().scaledToFill().clipped()
             } else {
-                Color.black
+                BeautifyStyle.graphite.previewGradient
             }
         case .color(let rgba):
             Color(red: rgba.red, green: rgba.green, blue: rgba.blue, opacity: rgba.alpha)
@@ -96,6 +99,16 @@ struct VideoTrimView: View {
             Section("Background") {
                 Picker("Preset", selection: $backdrop) {
                     Text("None").tag(VideoBackdrop?.none)
+                    // .color and .customImage are chosen via the ColorPicker
+                    // and file chooser below, not this list — without a
+                    // matching tag for them, selecting either produces a
+                    // SwiftUI "no tag matching selection" runtime warning.
+                    switch backdrop {
+                    case .color, .customImage:
+                        Text(backdrop?.title ?? "").tag(backdrop).disabled(true)
+                    default:
+                        EmptyView()
+                    }
                     ForEach(VideoBackdrop.pickerGroups, id: \.label) { group in
                         Section(group.label) {
                             ForEach(group.options) { option in

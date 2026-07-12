@@ -37,11 +37,15 @@ final class ExportStyleTests: XCTestCase {
         XCTAssertEqual(portrait.width, 640)
         XCTAssertEqual(portrait.height, (640.0 / (9.0 / 16.0)).rounded(), accuracy: 1)
 
-        // Widescreen for a tall video grows width
-        let tall = style.canvas(for: CGSize(width: 360, height: 640)).canvas
+        // Baseline: a 360×640 video is already portrait, so .portrait (still
+        // set from above) leaves its height untouched — used below to
+        // confirm switching to .widescreen grows width only.
+        let tallBaseline = style.canvas(for: CGSize(width: 360, height: 640)).canvas
+
+        // Widescreen for a tall video grows width, keeps height
         style.aspect = .widescreen
         let wide = style.canvas(for: CGSize(width: 360, height: 640)).canvas
-        XCTAssertEqual(wide.height, tall.height)
+        XCTAssertEqual(wide.height, tallBaseline.height)
         XCTAssertEqual(wide.width, (640.0 * (16.0 / 9.0)).rounded(), accuracy: 1)
         XCTAssertGreaterThan(wide.width, 360)
     }
@@ -60,5 +64,31 @@ final class ExportStyleTests: XCTestCase {
         style.aspect = .square
         style.save(to: defaults)
         XCTAssertEqual(ExportStyle.load(from: defaults), style)
+    }
+
+    /// A hand-edited/corrupted defaults blob (e.g. paddingFraction ≤ -0.5)
+    /// must never reach `canvas(for:)` unclamped: a negative/zero canvas
+    /// makes `AVAssetExportSession` throw an uncatchable
+    /// NSInvalidArgumentException ("renderSize must be positive") and kill
+    /// the process. `load()` must clamp every field to its UI range.
+    func testLoadClampsHostileStoredValues() throws {
+        let suite = "ExportStyleTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let hostileJSON = """
+        {"paddingFraction": -0.9, "cornerRadius": 500, "shadowOpacity": 7, "aspect": "auto"}
+        """
+        defaults.set(Data(hostileJSON.utf8), forKey: "videoExportStyle")
+
+        let loaded = ExportStyle.load(from: defaults)
+        XCTAssertEqual(loaded.paddingFraction, 0)
+        XCTAssertEqual(loaded.cornerRadius, 40)
+        XCTAssertEqual(loaded.shadowOpacity, 1)
+
+        let (canvas, padding) = loaded.canvas(for: CGSize(width: 640, height: 360))
+        XCTAssertGreaterThan(canvas.width, 0)
+        XCTAssertGreaterThan(canvas.height, 0)
+        XCTAssertGreaterThanOrEqual(padding, 0)
     }
 }

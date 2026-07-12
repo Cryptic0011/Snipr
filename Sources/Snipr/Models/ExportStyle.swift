@@ -71,7 +71,11 @@ struct ExportStyle: Codable, Equatable, Sendable {
     /// Padded canvas, then expanded — one dimension only, never shrunk —
     /// to the target aspect. Even-pixel rounding stays the compositor's job.
     func canvas(for videoSize: CGSize) -> (canvas: CGSize, padding: CGFloat) {
-        let padding = (min(videoSize.width, videoSize.height) * paddingFraction).rounded()
+        // Belt-and-braces: even if a caller builds an ExportStyle directly
+        // (bypassing load()'s clamping) with a negative paddingFraction, never
+        // let padding go negative — that can shrink the canvas to zero/negative
+        // and crash AVAssetExportSession ("renderSize must be positive").
+        let padding = max(0, (min(videoSize.width, videoSize.height) * paddingFraction).rounded())
         var canvas = CGSize(
             width: videoSize.width + padding * 2,
             height: videoSize.height + padding * 2
@@ -93,11 +97,25 @@ struct ExportStyle: Codable, Equatable, Sendable {
               let stored = try? JSONDecoder().decode(ExportStyle.self, from: data) else {
             return ExportStyle()
         }
-        return stored
+        return stored.clamped()
     }
 
     func save(to defaults: UserDefaults = .standard) {
         guard let data = try? JSONEncoder().encode(self) else { return }
         defaults.set(data, forKey: Self.defaultsKey)
+    }
+
+    /// Clamps every field to the range its Style popover slider allows. A
+    /// hand-edited or corrupted `videoExportStyle` defaults blob (e.g.
+    /// paddingFraction ≤ -0.5) can otherwise reach `canvas(for:)` with a
+    /// zero/negative canvas, which makes `AVAssetExportSession` throw an
+    /// uncatchable NSInvalidArgumentException ("video composition must have
+    /// a positive renderSize") and kill the process.
+    func clamped() -> ExportStyle {
+        var style = self
+        style.paddingFraction = min(max(paddingFraction, 0), 0.30)
+        style.cornerRadius = min(max(cornerRadius, 0), 40)
+        style.shadowOpacity = min(max(shadowOpacity, 0), 1)
+        return style
     }
 }
