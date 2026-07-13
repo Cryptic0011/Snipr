@@ -90,19 +90,21 @@ struct ExportStyle: Codable, Equatable, Sendable {
         return (canvas, padding)
     }
 
-    private static let defaultsKey = "videoExportStyle"
+    static let defaultsKey = "videoExportStyle"
+    /// Screenshot export keeps its own style so it never clobbers the video one.
+    static let screenshotDefaultsKey = "screenshotExportStyle"
 
-    static func load(from defaults: UserDefaults = .standard) -> ExportStyle {
-        guard let data = defaults.data(forKey: defaultsKey),
+    static func load(from defaults: UserDefaults = .standard, key: String = defaultsKey) -> ExportStyle {
+        guard let data = defaults.data(forKey: key),
               let stored = try? JSONDecoder().decode(ExportStyle.self, from: data) else {
             return ExportStyle()
         }
         return stored.clamped()
     }
 
-    func save(to defaults: UserDefaults = .standard) {
+    func save(to defaults: UserDefaults = .standard, key: String = defaultsKey) {
         guard let data = try? JSONEncoder().encode(self) else { return }
-        defaults.set(data, forKey: Self.defaultsKey)
+        defaults.set(data, forKey: key)
     }
 
     /// Clamps every field to the range its Style popover slider allows. A

@@ -3,28 +3,46 @@ import XCTest
 @testable import Snipr
 
 final class BeautifyRendererTests: XCTestCase {
-    func testCanvasGeometryEnforcesMinimumPadding() {
-        let (canvas, padding) = BeautifyRenderer.canvasGeometry(for: CGSize(width: 100, height: 100))
-        XCTAssertEqual(padding, 48)
-        XCTAssertEqual(canvas, CGSize(width: 196, height: 196))
-    }
+    func testRenderPadsImageWithGradientBackdrop() throws {
+        let source = try XCTUnwrap(makeSolidImage(width: 400, height: 400, gray: 1.0))
+        let rendered = try XCTUnwrap(
+            BeautifyRenderer.render(image: source, backdrop: .gradient(.ocean), style: ExportStyle())
+        )
 
-    func testCanvasGeometryScalesPaddingWithImage() {
-        let (canvas, padding) = BeautifyRenderer.canvasGeometry(for: CGSize(width: 2000, height: 1000))
-        XCTAssertEqual(padding, 80) // 8% of the short side
-        XCTAssertEqual(canvas, CGSize(width: 2160, height: 1160))
-    }
-
-    func testRenderProducesPaddedImageWithBackdrop() throws {
-        let source = try XCTUnwrap(makeSolidImage(width: 100, height: 100, gray: 1.0))
-        let rendered = try XCTUnwrap(BeautifyRenderer.render(image: source, style: .ocean))
-
-        XCTAssertEqual(rendered.width, 196)
-        XCTAssertEqual(rendered.height, 196)
+        // 8% padding of the 400px short side → 32px each side, canvas 464².
+        XCTAssertEqual(rendered.width, 464)
+        XCTAssertEqual(rendered.height, 464)
 
         // A corner pixel sits on the gradient, not the white source image.
         let corner = try XCTUnwrap(pixel(at: CGPoint(x: 2, y: 2), in: rendered))
         XCTAssertLessThan(corner.red, 0.9, "Corner should show the gradient backdrop, not the white image")
+    }
+
+    func testColorBackdropFillsCorners() throws {
+        let source = try XCTUnwrap(makeSolidImage(width: 400, height: 400, gray: 1.0))
+        let red = RGBA(red: 1, green: 0, blue: 0, alpha: 1)
+        let rendered = try XCTUnwrap(
+            BeautifyRenderer.render(image: source, backdrop: .color(red), style: ExportStyle())
+        )
+
+        // sRGB gamut-maps pure red slightly, so green/blue aren't exactly 0.
+        let corner = try XCTUnwrap(pixel(at: CGPoint(x: 2, y: 2), in: rendered))
+        XCTAssertGreaterThan(corner.red, 0.9)
+        XCTAssertLessThan(corner.green, 0.25)
+        XCTAssertLessThan(corner.blue, 0.25)
+    }
+
+    func testNonAutoAspectExpandsCanvas() throws {
+        let source = try XCTUnwrap(makeSolidImage(width: 400, height: 400, gray: 1.0))
+        var style = ExportStyle()
+        style.aspect = .widescreen
+        let rendered = try XCTUnwrap(
+            BeautifyRenderer.render(image: source, backdrop: .color(RGBA(red: 0, green: 0, blue: 0, alpha: 1)), style: style)
+        )
+
+        // Padded 464² canvas expands to 16:9; height stays, width grows.
+        XCTAssertEqual(rendered.height, 464)
+        XCTAssertEqual(rendered.width, Int((464.0 * 16.0 / 9.0).rounded()))
     }
 
     private func makeSolidImage(width: Int, height: Int, gray: CGFloat) -> CGImage? {
