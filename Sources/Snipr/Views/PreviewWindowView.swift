@@ -1,3 +1,4 @@
+import AppKit
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import SwiftUI
@@ -17,7 +18,11 @@ struct PreviewWindowView: View {
     @State private var editingTextID: UUID?
     @State private var selection: UUID?
     /// Share-ready backdrop applied at copy/save time; nil = plain export.
-    @State private var beautifyStyle: BeautifyStyle?
+    /// Shares the video export's models so both tools frame identically.
+    @State private var backdrop: VideoBackdrop?
+    @State private var style = ExportStyle.load(key: ExportStyle.screenshotDefaultsKey)
+    @State private var showStylePopover = false
+    @State private var customImageName: String?
     // Snapshot-based undo: every mutation pushes the whole layer array.
     // Annotation stacks are tiny, so this stays cheap and makes add, move,
     // delete, edit, and clear all undoable through one mechanism.
@@ -61,13 +66,7 @@ struct PreviewWindowView: View {
                         }
                     )
                     .frame(width: proxy.size.width, height: proxy.size.height)
-                    .background {
-                        if let beautifyStyle {
-                            beautifyStyle.previewGradient
-                        } else {
-                            Color.black.opacity(0.88)
-                        }
-                    }
+                    .background { backdropPreview }
                 } else {
                     ContentUnavailableView("Image Missing", systemImage: "photo.badge.exclamationmark")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -116,6 +115,125 @@ struct PreviewWindowView: View {
             }
             .padding(20)
         }
+        .onAppear {
+            backdrop = VideoBackdrop.loadSelection(key: VideoBackdrop.screenshotDefaultsKey)
+            if case .customImage(let url) = backdrop {
+                customImageName = url.lastPathComponent
+            }
+        }
+        .onChange(of: style) { _, newValue in
+            newValue.save(key: ExportStyle.screenshotDefaultsKey)
+        }
+        .onChange(of: backdrop) { _, newValue in
+            VideoBackdrop.saveSelection(newValue, key: VideoBackdrop.screenshotDefaultsKey)
+            if case .customImage = newValue {} else { customImageName = nil }
+        }
+    }
+
+    /// Backdrop shown behind the letterboxed editor image. Full framing
+    /// (padding, corners, shadow) is applied at export, not in this preview.
+    @ViewBuilder
+    private var backdropPreview: some View {
+        switch backdrop {
+        case .gradient(let style):
+            style.previewGradient
+        case .bundled, .wallpaper, .customImage:
+            if let image = backdrop?.resolveImage(for: nil) {
+                Image(nsImage: image).resizable().scaledToFill().clipped()
+            } else {
+                BeautifyStyle.graphite.previewGradient
+            }
+        case .color(let rgba):
+            Color(red: rgba.red, green: rgba.green, blue: rgba.blue, opacity: rgba.alpha)
+        case nil:
+            Color.black.opacity(0.88)
+        }
+    }
+
+    private var colorBinding: Binding<Color> {
+        Binding(
+            get: {
+                if case .color(let rgba) = backdrop { return rgba.color }
+                return Color.black
+            },
+            set: { backdrop = .color(RGBA(color: $0)) }
+        )
+    }
+
+    private var stylePopover: some View {
+        Form {
+            Section("Background") {
+                Picker("Preset", selection: $backdrop) {
+                    Text("None").tag(VideoBackdrop?.none)
+                    // .color and .customImage are chosen via the ColorPicker
+                    // and file chooser below, not this list — without a
+                    // matching tag SwiftUI warns "no tag matching selection".
+                    switch backdrop {
+                    case .color, .customImage:
+                        Text(backdrop?.title ?? "").tag(backdrop).disabled(true)
+                    default:
+                        EmptyView()
+                    }
+                    ForEach(VideoBackdrop.pickerGroups, id: \.label) { group in
+                        Section(group.label) {
+                            ForEach(group.options) { option in
+                                Text(option.title).tag(VideoBackdrop?.some(option))
+                            }
+                        }
+                    }
+                }
+
+                SwiftUI.ColorPicker("Color", selection: colorBinding, supportsOpacity: false)
+
+                LabeledContent("Custom Image") {
+                    Button(customImageName ?? "Choose…") {
+                        let panel = NSOpenPanel()
+                        panel.allowedContentTypes = [.image]
+                        panel.allowsMultipleSelection = false
+                        if panel.runModal() == .OK, let url = panel.url {
+                            backdrop = .customImage(url)
+                            customImageName = url.lastPathComponent
+                        }
+                    }
+                }
+
+                if case .bundled = backdrop {
+                    Text("Bundled wallpapers courtesy of the Recordly project.")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
+            Section("Frame") {
+                LabeledContent("Padding") {
+                    Slider(value: $style.paddingFraction, in: 0...0.30)
+                    Text(style.paddingFraction, format: .percent.precision(.fractionLength(0)))
+                        .monospacedDigit().frame(width: 44, alignment: .trailing)
+                }
+                LabeledContent("Corner radius") {
+                    Slider(value: $style.cornerRadius, in: 0...40)
+                    Text("\(Int(style.cornerRadius))")
+                        .monospacedDigit().frame(width: 44, alignment: .trailing)
+                }
+                LabeledContent("Shadow") {
+                    Slider(value: $style.shadowOpacity, in: 0...1)
+                    Text(style.shadowOpacity, format: .percent.precision(.fractionLength(0)))
+                        .monospacedDigit().frame(width: 44, alignment: .trailing)
+                }
+            }
+
+            Section("Canvas") {
+                Picker("Aspect", selection: $style.aspect) {
+                    ForEach(CanvasAspect.allCases) { aspect in
+                        Text(aspect.title).tag(aspect)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 340)
+        .padding(8)
     }
 
     private var toolbar: some View {
@@ -156,19 +274,15 @@ struct PreviewWindowView: View {
                 .frame(width: 82)
                 .help("Line width")
 
-            Menu {
-                Picker("Background", selection: $beautifyStyle) {
-                    Text("None").tag(BeautifyStyle?.none)
-                    ForEach(BeautifyStyle.allCases) { style in
-                        Text(style.title).tag(BeautifyStyle?.some(style))
-                    }
-                }
+            Button {
+                showStylePopover.toggle()
             } label: {
-                Image(systemName: beautifyStyle == nil ? "rectangle.dashed" : "rectangle.inset.filled")
+                Image(systemName: backdrop == nil ? "rectangle.dashed" : "rectangle.inset.filled")
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .help("Background: pad the export with a gradient backdrop")
+            .popover(isPresented: $showStylePopover, arrowEdge: .bottom) {
+                stylePopover
+            }
+            .help("Style: frame the export with a backdrop, padding, and shadow")
             .accessibilityLabel("Background style")
 
             Spacer()
@@ -339,9 +453,9 @@ struct PreviewWindowView: View {
         guard let rendered = AnnotationRenderer.renderImage(baseURL: item.fileURL, annotations: annotations) else {
             return nil
         }
-        guard let beautifyStyle,
+        guard let backdrop,
               let cgImage = rendered.cgImage(forProposedRect: nil, context: nil, hints: nil),
-              let framed = BeautifyRenderer.render(image: cgImage, style: beautifyStyle) else {
+              let framed = BeautifyRenderer.render(image: cgImage, backdrop: backdrop, style: style) else {
             return rendered
         }
         return NSImage(cgImage: framed, size: NSSize(width: framed.width, height: framed.height))

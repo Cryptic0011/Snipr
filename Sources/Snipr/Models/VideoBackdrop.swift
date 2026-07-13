@@ -71,17 +71,19 @@ enum VideoBackdrop: Hashable, Identifiable, Codable {
 
 extension VideoBackdrop {
     static let defaultsKey = "videoExportBackdrop"
+    /// Screenshot export keeps its own backdrop selection, separate from video.
+    static let screenshotDefaultsKey = "screenshotExportBackdrop"
 
-    static func loadSelection(from defaults: UserDefaults = .standard) -> VideoBackdrop? {
-        guard let data = defaults.data(forKey: defaultsKey) else { return nil }
+    static func loadSelection(from defaults: UserDefaults = .standard, key: String = defaultsKey) -> VideoBackdrop? {
+        guard let data = defaults.data(forKey: key) else { return nil }
         return try? JSONDecoder().decode(VideoBackdrop.self, from: data)
     }
 
-    static func saveSelection(_ backdrop: VideoBackdrop?, to defaults: UserDefaults = .standard) {
+    static func saveSelection(_ backdrop: VideoBackdrop?, to defaults: UserDefaults = .standard, key: String = defaultsKey) {
         guard let backdrop, let data = try? JSONEncoder().encode(backdrop) else {
-            defaults.removeObject(forKey: defaultsKey)
+            defaults.removeObject(forKey: key)
             return
         }
-        defaults.set(data, forKey: defaultsKey)
+        defaults.set(data, forKey: key)
     }
 }
