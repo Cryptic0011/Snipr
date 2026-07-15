@@ -7,6 +7,17 @@
     <language>en</language>
     <!-- RELEASES (script/release.sh inserts new items below this line) -->
     <item>
+      <title>Snipr 0.2.0</title>
+      <pubDate>Wed, 15 Jul 2026 12:56:56 -0400</pubDate>
+      <sparkle:version>0.2.0</sparkle:version>
+      <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url="https://github.com/Cryptic0011/Snipr/releases/download/v0.2.0/Snipr-0.2.0.dmg"
+        sparkle:edSignature="kSwXakqzfp3wDSLe9xNUBFmnIHwOsk9DJE/tFO00Ur/pKq6ydo7nJzBBXnJhxsJ0IMxyiikyNMLsO74DTAnnAA==" length="4649893"
+        type="application/octet-stream"/>
+    </item>
+    <item>
       <title>Snipr 0.1.0</title>
       <pubDate>Tue, 07 Jul 2026 09:51:47 -0400</pubDate>
       <sparkle:version>0.1.0</sparkle:version>
