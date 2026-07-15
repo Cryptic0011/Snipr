@@ -15,6 +15,7 @@ final class SniprPreferences {
         static let copyToClipboardOnCapture = "copyToClipboardOnCapture"
         static let saveToDiskOnCapture = "saveToDiskOnCapture"
         static let showCaptureMagnifier = "showCaptureMagnifier"
+        static let showSelectionCoordinates = "showSelectionCoordinates"
         static let captureFormat = "captureFormat"
         static let captureFilenameTemplate = "captureFilenameTemplate"
         static let colorOutputFormat = "colorOutputFormat"
@@ -30,6 +31,10 @@ final class SniprPreferences {
         static let showWebcamWhileRecording = "showWebcamWhileRecording"
         static let webcamBubbleDiameter = "webcamBubbleDiameter"
         static let webcamBubbleBorderColor = "webcamBubbleBorderColor"
+        static let recordingCustomCursor = "recordingCustomCursor"
+        static let recordingCursorSmoothing = "recordingCursorSmoothing"
+        static let recordingCursorScale = "recordingCursorScale"
+        static let recordingCursorColor = "recordingCursorColor"
     }
 
     var showStackAfterCapture: Bool {
@@ -69,6 +74,11 @@ final class SniprPreferences {
 
     var showCaptureMagnifier: Bool {
         didSet { defaults.set(showCaptureMagnifier, forKey: Keys.showCaptureMagnifier) }
+    }
+
+    /// Show the cursor / selection x,y readout on capture overlays.
+    var showSelectionCoordinates: Bool {
+        didSet { defaults.set(showSelectionCoordinates, forKey: Keys.showSelectionCoordinates) }
     }
 
     /// Phase 1: encoded format new captures land on disk / clipboard as.
@@ -138,6 +148,28 @@ final class SniprPreferences {
         didSet { defaults.set(webcamBubbleBorderColor.rawValue, forKey: Keys.webcamBubbleBorderColor) }
     }
 
+    /// Record with the system cursor hidden and bake a synthetic smoothed
+    /// cursor into the file right after the recording stops.
+    var recordingCustomCursor: Bool {
+        didSet { defaults.set(recordingCustomCursor, forKey: Keys.recordingCustomCursor) }
+    }
+
+    /// Smooth the synthetic cursor's path (cubic interpolation over a
+    /// thinned sample set). Off = raw 60 Hz path.
+    var recordingCursorSmoothing: Bool {
+        didSet { defaults.set(recordingCursorSmoothing, forKey: Keys.recordingCursorSmoothing) }
+    }
+
+    /// Synthetic cursor size multiplier (1.0–3.0).
+    var recordingCursorScale: Double {
+        didSet { defaults.set(recordingCursorScale, forKey: Keys.recordingCursorScale) }
+    }
+
+    /// Synthetic cursor tint preset.
+    var recordingCursorColor: CursorColor {
+        didSet { defaults.set(recordingCursorColor.rawValue, forKey: Keys.recordingCursorColor) }
+    }
+
     /// Phase 4: app-name → subfolder routing rules. Rules are evaluated in
     /// order; first match wins. Empty array means "no routing, captures land
     /// in the existing `Images/` root".
@@ -159,6 +191,7 @@ final class SniprPreferences {
         copyToClipboardOnCapture = defaults.object(forKey: Keys.copyToClipboardOnCapture) as? Bool ?? true
         saveToDiskOnCapture = defaults.object(forKey: Keys.saveToDiskOnCapture) as? Bool ?? true
         showCaptureMagnifier = defaults.object(forKey: Keys.showCaptureMagnifier) as? Bool ?? false
+        showSelectionCoordinates = defaults.object(forKey: Keys.showSelectionCoordinates) as? Bool ?? false
         captureFormat = Self.loadCaptureFormat(from: defaults)
         captureFilenameTemplate = (defaults.object(forKey: Keys.captureFilenameTemplate) as? String)
             ?? CaptureFilenameTemplate.defaultTemplate
@@ -181,6 +214,12 @@ final class SniprPreferences {
         webcamBubbleDiameter = defaults.object(forKey: Keys.webcamBubbleDiameter) as? Double ?? 160
         webcamBubbleBorderColor = WebcamBorderColor(
             rawValue: defaults.string(forKey: Keys.webcamBubbleBorderColor) ?? ""
+        ) ?? .white
+        recordingCustomCursor = defaults.object(forKey: Keys.recordingCustomCursor) as? Bool ?? false
+        recordingCursorSmoothing = defaults.object(forKey: Keys.recordingCursorSmoothing) as? Bool ?? true
+        recordingCursorScale = defaults.object(forKey: Keys.recordingCursorScale) as? Double ?? 1.5
+        recordingCursorColor = CursorColor(
+            rawValue: defaults.string(forKey: Keys.recordingCursorColor) ?? ""
         ) ?? .white
     }
 

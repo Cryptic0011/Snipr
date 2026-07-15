@@ -13,7 +13,7 @@ struct RecordingHUDView: View {
             Circle()
                 .fill(Color.red)
                 .frame(width: 10, height: 10)
-                .shadow(color: .red.opacity(0.8), radius: 8)
+                .shadow(color: .red.opacity(0.4), radius: 3)
 
             Text(elapsedText)
                 .font(.system(size: 14, weight: .bold, design: .monospaced))

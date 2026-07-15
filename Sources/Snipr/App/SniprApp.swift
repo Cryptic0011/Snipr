@@ -72,6 +72,17 @@ final class SniprAppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
+    /// `snipr://` deep links (CLI via `open`, Shortcuts, Raycast). Unknown
+    /// URLs are ignored rather than alerted: a bad link from a third-party
+    /// script shouldn't steal focus with a modal.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            guard let id = SniprCommandID(url: url),
+                  let command = SniprCommand.all.first(where: { $0.id == id }) else { continue }
+            model.coordinator.execute(command)
+        }
+    }
+
     /// Create-once dashboard window. `isReleasedWhenClosed = false` means the
     /// red close button only hides it, so every later "Show Dashboard" can
     /// bring the same window back.

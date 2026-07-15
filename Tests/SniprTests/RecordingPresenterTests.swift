@@ -101,6 +101,85 @@ final class RecordingPresenterTests: XCTestCase {
         XCTAssertEqual(engine.cancelCalls, 1)
     }
 
+    /// Custom-cursor pref on → the engine is asked to hide the system
+    /// cursor; off → it isn't.
+    func testCustomCursorPrefHidesSystemCursor() async throws {
+        let store = CaptureStore(rootDirectory: tempRoot)
+        let engine = FakeRecordingEngine()
+        // Isolated defaults, same pattern as SniprPreferencesTests.makeDefaults():
+        let suiteName = "RecordingPresenterTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let prefs = SniprPreferences(defaults: defaults)
+        prefs.recordingCustomCursor = true
+        let presenter = RecordingPresenter(recordingEngine: engine, captureStore: store, preferences: prefs)
+
+        let screen = try XCTUnwrap(NSScreen.main)
+        presenter.start(displayID: CGMainDisplayID(), screen: screen, rect: CGRect(x: 0, y: 0, width: 320, height: 240))
+        try await waitFor(timeout: 2) { engine.startCalls.count == 1 }
+        XCTAssertEqual(engine.lastOptions?.hidesSystemCursor, true)
+
+        presenter.cancel()
+    }
+
+    /// With the pref off, options say so and no bake runs — the stored file
+    /// is byte-identical to what the engine produced.
+    func testNoCursorPrefLeavesRecordingUntouched() async throws {
+        let store = CaptureStore(rootDirectory: tempRoot)
+        let engine = FakeRecordingEngine()
+        let suiteName = "RecordingPresenterTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let prefs = SniprPreferences(defaults: defaults)
+        let presenter = RecordingPresenter(recordingEngine: engine, captureStore: store, preferences: prefs)
+
+        let finished = expectation(description: "finished")
+        presenter.onRecordingFinished = { finished.fulfill() }
+
+        let screen = try XCTUnwrap(NSScreen.main)
+        presenter.start(displayID: CGMainDisplayID(), screen: screen, rect: CGRect(x: 0, y: 0, width: 320, height: 240))
+        try await waitFor(timeout: 2) { engine.startCalls.count == 1 }
+        XCTAssertEqual(engine.lastOptions?.hidesSystemCursor, false)
+
+        presenter.stop()
+        await fulfillment(of: [finished], timeout: 2)
+        // FakeRecordingEngine writes Data([0x00]); an accidental bake attempt
+        // on a bogus file would fail and surface an error instead.
+        let url = try XCTUnwrap(store.items.first?.fileURL)
+        XCTAssertEqual(try Data(contentsOf: url), Data([0x00]))
+    }
+
+    /// Bake failure (the fake's file isn't a real video) falls back to the
+    /// raw recording: item still lands in the store, error is surfaced.
+    func testFailedCursorBakeKeepsRawRecording() async throws {
+        let store = CaptureStore(rootDirectory: tempRoot)
+        let engine = FakeRecordingEngine()
+        let suiteName = "RecordingPresenterTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let prefs = SniprPreferences(defaults: defaults)
+        prefs.recordingCustomCursor = true
+        let presenter = RecordingPresenter(recordingEngine: engine, captureStore: store, preferences: prefs)
+
+        let finished = expectation(description: "finished")
+        presenter.onRecordingFinished = { finished.fulfill() }
+        var surfacedError: Error?
+        presenter.onError = { surfacedError = $0 }
+
+        let screen = try XCTUnwrap(NSScreen.main)
+        presenter.start(displayID: CGMainDisplayID(), screen: screen, rect: CGRect(x: 0, y: 0, width: 320, height: 240))
+        try await waitFor(timeout: 2) { engine.startCalls.count == 1 }
+        // The bake branch only runs when the 60 Hz sampler captured at
+        // least one point; wait for a tick so the precondition is
+        // deterministic instead of racing the timer.
+        try await waitFor(timeout: 2) { presenter.capturedCursorSampleCount >= 1 }
+
+        presenter.stop()
+        await fulfillment(of: [finished], timeout: 10)
+        XCTAssertEqual(store.items.count, 1, "raw recording must survive a failed bake")
+        XCTAssertNotNil(surfacedError, "bake failure should be reported")
+    }
+
     private func waitFor(timeout seconds: TimeInterval, condition: @MainActor () -> Bool) async throws {
         let deadline = Date().addingTimeInterval(seconds)
         while Date() < deadline {

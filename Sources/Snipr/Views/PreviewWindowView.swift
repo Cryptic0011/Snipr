@@ -17,7 +17,10 @@ struct PreviewWindowView: View {
     @State private var editingTextID: UUID?
     @State private var selection: UUID?
     /// Share-ready backdrop applied at copy/save time; nil = plain export.
-    @State private var beautifyStyle: BeautifyStyle?
+    /// Persisted separately from the video export's choice.
+    @State private var backdrop = VideoBackdrop.loadSelection(key: VideoBackdrop.imageDefaultsKey)
+    @State private var exportStyle = ExportStyle.load(key: ExportStyle.imageDefaultsKey)
+    @State private var showStylePopover = false
     // Snapshot-based undo: every mutation pushes the whole layer array.
     // Annotation stacks are tiny, so this stays cheap and makes add, move,
     // delete, edit, and clear all undoable through one mechanism.
@@ -30,44 +33,56 @@ struct PreviewWindowView: View {
 
             GeometryReader { proxy in
                 if let image = NSImage(contentsOf: item.fileURL) {
-                    AnnotationCanvasView(
-                        image: image,
-                        containerSize: proxy.size,
-                        selectedTool: selectedTool,
-                        selectedInk: selectedInk,
-                        lineWidth: lineWidth,
-                        annotations: annotations,
-                        draftAnnotation: draftAnnotation,
-                        selectedID: selection,
-                        onDraftChanged: { draftAnnotation = $0 },
-                        onCommit: { annotation in
-                            commit(annotation)
-                        },
-                        onCancelDraft: {
-                            draftAnnotation = nil
-                        },
-                        onSelect: { selection = $0 },
-                        onMoveBegan: { pushUndo() },
-                        onUpdate: { updated in
-                            if let index = annotations.firstIndex(where: { $0.id == updated.id }) {
-                                annotations[index] = updated
+                    // WYSIWYG: the export canvas (backdrop, padding, corners,
+                    // shadow, aspect) at fit scale, live-updating with the
+                    // Style popover.
+                    let layout = previewLayout(imageSize: pixelSize(of: image), container: proxy.size)
+                    ZStack {
+                        if let backdrop {
+                            BackdropPreview(backdrop: backdrop)
+                                .frame(width: layout.canvas.width, height: layout.canvas.height)
+                                .clipped()
+                        }
+                        AnnotationCanvasView(
+                            image: image,
+                            containerSize: layout.display,
+                            selectedTool: selectedTool,
+                            selectedInk: selectedInk,
+                            lineWidth: lineWidth,
+                            annotations: annotations,
+                            draftAnnotation: draftAnnotation,
+                            selectedID: selection,
+                            onDraftChanged: { draftAnnotation = $0 },
+                            onCommit: { annotation in
+                                commit(annotation)
+                            },
+                            onCancelDraft: {
+                                draftAnnotation = nil
+                            },
+                            onSelect: { selection = $0 },
+                            onMoveBegan: { pushUndo() },
+                            onUpdate: { updated in
+                                if let index = annotations.firstIndex(where: { $0.id == updated.id }) {
+                                    annotations[index] = updated
+                                }
+                            },
+                            onEditText: { id in
+                                guard let existing = annotations.first(where: { $0.id == id }) else { return }
+                                editingTextID = id
+                                pendingTextString = existing.text
+                                pendingTextDraft = existing
                             }
-                        },
-                        onEditText: { id in
-                            guard let existing = annotations.first(where: { $0.id == id }) else { return }
-                            editingTextID = id
-                            pendingTextString = existing.text
-                            pendingTextDraft = existing
-                        }
-                    )
-                    .frame(width: proxy.size.width, height: proxy.size.height)
-                    .background {
-                        if let beautifyStyle {
-                            beautifyStyle.previewGradient
-                        } else {
-                            Color.black.opacity(0.88)
-                        }
+                        )
+                        .frame(width: layout.display.width, height: layout.display.height)
+                        .clipShape(RoundedRectangle(cornerRadius: layout.cornerRadius))
+                        .shadow(
+                            color: .black.opacity(backdrop == nil ? 0 : exportStyle.shadowOpacity),
+                            radius: layout.shadowRadius,
+                            y: layout.shadowY
+                        )
                     }
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .background(Color.black.opacity(0.88))
                 } else {
                     ContentUnavailableView("Image Missing", systemImage: "photo.badge.exclamationmark")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -75,6 +90,12 @@ struct PreviewWindowView: View {
             }
 
             footer
+        }
+        .onChange(of: exportStyle) { _, newValue in
+            newValue.save(key: ExportStyle.imageDefaultsKey)
+        }
+        .onChange(of: backdrop) { _, newValue in
+            VideoBackdrop.saveSelection(newValue, key: VideoBackdrop.imageDefaultsKey)
         }
         .sheet(isPresented: Binding(
             get: { pendingTextDraft != nil },
@@ -156,20 +177,16 @@ struct PreviewWindowView: View {
                 .frame(width: 82)
                 .help("Line width")
 
-            Menu {
-                Picker("Background", selection: $beautifyStyle) {
-                    Text("None").tag(BeautifyStyle?.none)
-                    ForEach(BeautifyStyle.allCases) { style in
-                        Text(style.title).tag(BeautifyStyle?.some(style))
-                    }
-                }
+            Button {
+                showStylePopover.toggle()
             } label: {
-                Image(systemName: beautifyStyle == nil ? "rectangle.dashed" : "rectangle.inset.filled")
+                Image(systemName: backdrop == nil ? "rectangle.dashed" : "rectangle.inset.filled")
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .help("Background: pad the export with a gradient backdrop")
-            .accessibilityLabel("Background style")
+            .popover(isPresented: $showStylePopover, arrowEdge: .bottom) {
+                ExportStylePopover(backdrop: $backdrop, style: $exportStyle)
+            }
+            .help("Style: backdrop, padding, corners, and shadow for the export")
+            .accessibilityLabel("Export style")
 
             Spacer()
 
@@ -334,14 +351,45 @@ struct PreviewWindowView: View {
         self.selection = nil
     }
 
-    /// Annotations rendered, then the optional beautify backdrop applied.
+    private struct PreviewLayout {
+        var canvas: CGSize
+        var display: CGSize
+        var cornerRadius: CGFloat
+        var shadowRadius: CGFloat
+        var shadowY: CGFloat
+    }
+
+    /// Screen-scale mirror of BeautifyRenderer's export geometry: fit the
+    /// styled canvas into the pane, then scale every framing value by the
+    /// same factor so the preview matches the copied/saved pixels.
+    private func previewLayout(imageSize: CGSize, container: CGSize) -> PreviewLayout {
+        guard backdrop != nil else {
+            let fitted = ImagePresentationGeometry.aspectFitRect(imageSize: imageSize, containerSize: container)
+            return PreviewLayout(canvas: container, display: fitted.size, cornerRadius: 0, shadowRadius: 0, shadowY: 0)
+        }
+        let style = exportStyle.clamped()
+        let (canvas, padding) = style.canvas(for: imageSize)
+        let fitted = ImagePresentationGeometry.aspectFitRect(imageSize: canvas, containerSize: container)
+        let scale = canvas.width > 0 ? fitted.width / canvas.width : 1
+        // Same floor as the renderer so the shadow shows even at padding 0.
+        let shadowScale = max(padding, min(imageSize.width, imageSize.height) * 0.04) * scale
+        return PreviewLayout(
+            canvas: fitted.size,
+            display: CGSize(width: imageSize.width * scale, height: imageSize.height * scale),
+            cornerRadius: style.cornerRadius * scale,
+            shadowRadius: shadowScale * 0.5,
+            shadowY: shadowScale * 0.16
+        )
+    }
+
+    /// Annotations rendered, then the optional styled backdrop applied.
     private func exportImage() -> NSImage? {
         guard let rendered = AnnotationRenderer.renderImage(baseURL: item.fileURL, annotations: annotations) else {
             return nil
         }
-        guard let beautifyStyle,
+        guard let backdrop,
               let cgImage = rendered.cgImage(forProposedRect: nil, context: nil, hints: nil),
-              let framed = BeautifyRenderer.render(image: cgImage, style: beautifyStyle) else {
+              let framed = BeautifyRenderer.render(image: cgImage, backdrop: backdrop, style: exportStyle, screen: NSScreen.main) else {
             return rendered
         }
         return NSImage(cgImage: framed, size: NSSize(width: framed.width, height: framed.height))
@@ -461,11 +509,7 @@ private struct AnnotationCanvasView: View {
     }
 
     private var imagePixelSize: CGSize {
-        if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-            return CGSize(width: cgImage.width, height: cgImage.height)
-        }
-
-        return image.size
+        pixelSize(of: image)
     }
 
     private func drawingGesture(imageSize: CGSize, displayRect: CGRect) -> some Gesture {
@@ -680,6 +724,15 @@ private struct AnnotationCanvasView: View {
         path.addLine(to: second)
         context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
     }
+}
+
+/// Pixel dimensions of an image; `NSImage.size` is in points, and annotation
+/// geometry lives in pixels.
+private func pixelSize(of image: NSImage) -> CGSize {
+    if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+        return CGSize(width: cgImage.width, height: cgImage.height)
+    }
+    return image.size
 }
 
 enum AnnotationEffectPreview {

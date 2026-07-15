@@ -88,6 +88,7 @@ final class CaptureSelectionNSView: NSView {
     /// Freeze-screen mode: draw the captured display still behind the dim
     /// layer so on-screen motion can't shift under the crosshair. The image
     /// arrives asynchronously via `setSourceImage` (same still the loupe uses).
+    var showsCoordinates = false
     var freezesBackground = false
     private var frozenBackground: NSImage?
 
@@ -312,6 +313,7 @@ final class CaptureSelectionNSView: NSView {
     }
 
     private func drawDimensions(for rect: CGRect) {
+        guard showsCoordinates else { return }
         let text = "\(Int(rect.width)) × \(Int(rect.height))   \(Int(rect.minX)), \(Int(rect.minY))"
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .semibold),
@@ -431,7 +433,7 @@ final class CaptureSelectionNSView: NSView {
         // Standalone crosshair coords readout (separate from the in-rect
         // dimensions text) so the user always sees the cursor coordinate
         // even before the first click.
-        guard startPoint == nil, selectionCoordinator?.isSelecting != true else {
+        guard showsCoordinates, startPoint == nil, selectionCoordinator?.isSelecting != true else {
             coordLabel.isHidden = true
             return
         }

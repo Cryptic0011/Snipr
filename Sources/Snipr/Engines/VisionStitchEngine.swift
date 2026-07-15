@@ -55,46 +55,153 @@ struct VisionStitchEngine: StitchEngine {
             return try stitchTranslating(frames)
         }
 
+        // Rows scroll; columns don't. A static app sidebar or a scrollbar
+        // thumb (which moves *against* the content) can never be vertically
+        // stitched. The sidebar stays in the OUTPUT (users want the whole
+        // window), but must stay out of the CORRELATION — its static pixels
+        // poison the row alignment. The scrollbar strip is shaved from the
+        // output too: a smeared thumb is pure noise.
+        let columns = sideCropRange(frames, width: width, height: height)
+        var workingFrames = frames          // output frames (keep sidebar)
+        var workingWidth = width
+        if columns.upperBound < width {     // right side: scrollbar shave only
+            let rect = CGRect(x: 0, y: 0, width: columns.upperBound, height: height)
+            let cropped = frames.compactMap { $0.cropping(to: rect) }
+            if cropped.count == frames.count {
+                workingFrames = cropped
+                workingWidth = columns.upperBound
+            }
+        }
+        var correlationFrames = workingFrames
+        var correlationWidth = workingWidth
+        if columns.lowerBound > 0 {         // left side: exclude from correlation
+            let rect = CGRect(x: columns.lowerBound, y: 0, width: workingWidth - columns.lowerBound, height: height)
+            let cropped = workingFrames.compactMap { $0.cropping(to: rect) }
+            if cropped.count == workingFrames.count {
+                correlationFrames = cropped
+                correlationWidth = workingWidth - columns.lowerBound
+            }
+        }
+
         // A captured window is `[static chrome band][scrolling content][maybe
         // static footer]`. Only the content is a vertical translation between
         // frames; the static bands fool the row-correlation into rejecting the
         // true (large) overlap, so it stacks near-duplicate frames and repeats
         // the chrome. Detect the static bands, stitch only the content, and
         // re-add each band exactly once.
-        let bands = staticBandHeights(frames, width: width, height: height)
+        let bands = staticBandHeights(correlationFrames, width: correlationWidth, height: height)
         guard bands.top > 0 || bands.bottom > 0 else {
-            return try stitchTranslating(frames)
+            return try stitchTranslating(workingFrames, correlating: correlationFrames)
         }
 
         let dynamicHeight = height - bands.top - bands.bottom
-        let dynamicRect = CGRect(x: 0, y: bands.top, width: width, height: dynamicHeight)
-        let contentFrames = frames.compactMap { $0.cropping(to: dynamicRect) }
-        guard contentFrames.count == frames.count else {
-            return try stitchTranslating(frames)
+        let dynamicRect = CGRect(x: 0, y: bands.top, width: workingWidth, height: dynamicHeight)
+        let contentFrames = workingFrames.compactMap { $0.cropping(to: dynamicRect) }
+        let correlationRect = CGRect(x: 0, y: bands.top, width: correlationWidth, height: dynamicHeight)
+        let contentCorrelation = correlationFrames.compactMap { $0.cropping(to: correlationRect) }
+        guard contentFrames.count == workingFrames.count,
+              contentCorrelation.count == contentFrames.count else {
+            return try stitchTranslating(workingFrames, correlating: correlationFrames)
         }
         let content: CGImage?
         do {
-            content = try stitchTranslating(contentFrames)
+            content = try stitchTranslating(contentFrames, correlating: contentCorrelation)
         } catch {
             // Band detection can guess wrong (e.g. a page-wide sticky element
             // misread as chrome). Fall back to full-frame stitching, which the
             // pre-band code always used, rather than failing the whole stitch.
-            return try stitchTranslating(frames)
+            return try stitchTranslating(workingFrames, correlating: correlationFrames)
         }
         guard let content else { return nil }
 
         // Re-add the static bands once: top from the first frame, footer from
         // the last (they're identical across frames by definition).
         let topBand = bands.top > 0
-            ? frames.first?.cropping(to: CGRect(x: 0, y: 0, width: width, height: bands.top))
+            ? workingFrames.first?.cropping(to: CGRect(x: 0, y: 0, width: workingWidth, height: bands.top))
             : nil
         let bottomBand = bands.bottom > 0
-            ? frames.last?.cropping(to: CGRect(x: 0, y: height - bands.bottom, width: width, height: bands.bottom))
+            ? workingFrames.last?.cropping(to: CGRect(x: 0, y: height - bands.bottom, width: workingWidth, height: bands.bottom))
             : nil
-        return composeVertically([topBand, content, bottomBand].compactMap { $0 }, width: width)
+        return composeVertically([topBand, content, bottomBand].compactMap { $0 }, width: workingWidth)
     }
 
-    private func stitchTranslating(_ frames: [CGImage]) throws -> CGImage? {
+    /// Detect the scrolling column range. Edge columns that are
+    /// pixel-identical across sampled frames (app sidebars, window padding)
+    /// are excluded, as is a right-edge scrollbar strip — identifiable as a
+    /// strip that is static except for a bounded run of thumb rows.
+    private func sideCropRange(_ frames: [CGImage], width: Int, height: Int) -> Range<Int> {
+        let rasters = sampledRasters(frames, width: width, height: height)
+        guard rasters.count >= 2, let reference = rasters.first else { return 0..<width }
+        let staticThreshold = 1.0
+
+        func columnIsStatic(_ x: Int) -> Bool {
+            for raster in rasters.dropFirst() {
+                var sum = 0
+                var y = 0
+                while y < height {
+                    sum += abs(Int(reference[y * width + x]) - Int(raster[y * width + x]))
+                    y += 1
+                }
+                if Double(sum) / Double(height) > staticThreshold { return false }
+            }
+            return true
+        }
+
+        var left = 0
+        while left < width, columnIsStatic(left) { left += 1 }
+        var right = width
+        while right > left, columnIsStatic(right - 1) { right -= 1 }
+        // A mostly-static width means the heuristic is unreliable (barely any
+        // scroll, or a tiny scrolled pane) — keep the full frame.
+        guard right - left >= width / 4 else { return 0..<width }
+
+        // Overlay scrollbars hug the right edge of the pane. A thumb column is
+        // "dynamic" but, unlike content, differs on only a bounded fraction of
+        // rows (its positions across samples). Walk the thumb-like run in from
+        // the right edge and shave it, plus any track margin it was hiding. A
+        // run wider than a plausible scrollbar means sparse content — keep it.
+        // ponytail: fraction heuristic; build a real thumb tracker if this
+        // misfires.
+        func columnDifferingFraction(_ x: Int) -> Double {
+            var maxFraction = 0.0
+            for raster in rasters.dropFirst() {
+                var differingRows = 0
+                for y in 0..<height where abs(Int(reference[y * width + x]) - Int(raster[y * width + x])) > 2 {
+                    differingRows += 1
+                }
+                maxFraction = max(maxFraction, Double(differingRows) / Double(height))
+            }
+            return maxFraction
+        }
+        let maxScrollbarWidth = max(20, width / 80)
+        var thumbRun = 0
+        while thumbRun <= maxScrollbarWidth, right - thumbRun > left {
+            let fraction = columnDifferingFraction(right - thumbRun - 1)
+            guard fraction > 0, fraction <= 0.6 else { break }
+            thumbRun += 1
+        }
+        if thumbRun > 0, thumbRun <= maxScrollbarWidth, right - left - thumbRun >= width / 4 {
+            right -= thumbRun
+            while right > left, columnIsStatic(right - 1) { right -= 1 }
+        }
+        return left..<right
+    }
+
+    /// Up to 6 frames spread across the capture, rasterized to top-left
+    /// grayscale. Shared by the static-band and static-column detectors.
+    private func sampledRasters(_ frames: [CGImage], width: Int, height: Int) -> [[UInt8]] {
+        guard frames.count >= 2, width > 0, height > 0 else { return [] }
+        let sampleCount = min(6, frames.count)
+        let step = max(1, (frames.count - 1) / max(1, sampleCount - 1))
+        let samples = stride(from: 0, to: frames.count, by: step).map { frames[$0] }
+        return samples.compactMap { Self.topLeftGrayscale($0, width: width, height: height) }
+    }
+
+    /// - Parameter correlationFrames: optional column-cropped variants of
+    ///   `frames` (same order, same heights) used for overlap detection only.
+    ///   Lets static side columns (sidebars) stay in the composited output
+    ///   without poisoning the row correlation.
+    private func stitchTranslating(_ frames: [CGImage], correlating correlationFrames: [CGImage]? = nil) throws -> CGImage? {
         guard !frames.isEmpty else { throw StitchError.noFrames }
         if frames.count == 1 { return frames[0] }
 
@@ -106,6 +213,11 @@ struct VisionStitchEngine: StitchEngine {
         guard frames.allSatisfy({ $0.width == width }) else {
             throw StitchError.unequalWidths
         }
+        let correlationSource = correlationFrames ?? frames
+        guard correlationSource.count == frames.count,
+              correlationSource.allSatisfy({ $0.width == correlationSource[0].width }) else {
+            throw StitchError.unequalWidths
+        }
 
         // Rasterize to grayscale in parallel — each frame is independent and
         // the per-frame draw is the second-biggest cost after correlation.
@@ -115,7 +227,7 @@ struct VisionStitchEngine: StitchEngine {
             // pointer is safe to hand to concurrent workers.
             nonisolated(unsafe) let base = buf.baseAddress!
             DispatchQueue.concurrentPerform(iterations: frames.count) { i in
-                base[i] = GrayscaleBuffer(image: frames[i])
+                base[i] = GrayscaleBuffer(image: correlationSource[i])
             }
         }
         guard optionalBuffers.allSatisfy({ $0 != nil }) else {
@@ -149,14 +261,32 @@ struct VisionStitchEngine: StitchEngine {
             throw StitchError.allFramesRejected
         }
 
-        // Build the output canvas. Heights of frames we keep, with each
-        // subsequent frame contributing (height − overlap).
-        var keptFrames: [CGImage] = [frames[0]]
-        var keptOverlaps: [Int] = []
-        for (index, overlap) in acceptedOverlaps.enumerated() where overlap >= 0 {
-            keptFrames.append(frames[index + 1])
-            keptOverlaps.append(overlap)
+        // A rejected pair breaks the alignment chain: each accepted overlap is
+        // measured against the immediately preceding frame, so once a frame is
+        // dropped, the overlaps after the gap are meaningless relative to the
+        // last kept frame. Splicing across the gap shears the composite (the
+        // "shredded stripes" field bug). Stitch the tallest run of
+        // consecutively-accepted pairs instead.
+        var runs: [(start: Int, overlaps: [Int])] = []
+        var current: (start: Int, overlaps: [Int]) = (0, [])
+        for (index, overlap) in acceptedOverlaps.enumerated() {
+            if overlap >= 0 {
+                current.overlaps.append(overlap)
+            } else {
+                runs.append(current)
+                current = (index + 1, [])
+            }
         }
+        runs.append(current)
+
+        func runHeight(_ run: (start: Int, overlaps: [Int])) -> Int {
+            frames[run.start].height + run.overlaps.enumerated().reduce(0) { acc, pair in
+                acc + frames[run.start + pair.offset + 1].height - pair.element
+            }
+        }
+        let best = runs.max { runHeight($0) < runHeight($1) }!
+        let keptFrames = (best.start...(best.start + best.overlaps.count)).map { frames[$0] }
+        let keptOverlaps = best.overlaps
 
         let totalHeight = keptFrames.first!.height +
             zip(keptFrames.dropFirst(), keptOverlaps).reduce(0) { acc, pair in
@@ -225,32 +355,36 @@ struct VisionStitchEngine: StitchEngine {
         guard maxOverlap > 0 else { return 0 }
 
         // The MAE surface is a sharp dip at the true alignment: candidates even
-        // a few px off read as noise on high-frequency content. Stepping the
-        // *overlap* coarsely therefore walks straight past the dip and rejects
-        // stitchable pairs. Instead, test every overlap but make each test
-        // cheap by subsampling columns (~96 of them) — rows stay exact, so the
-        // dip is still visible — then refine full-width around the hit.
+        // a few px off read as noise on high-frequency content. Scan EVERY
+        // overlap and take the global error minimum. Accepting the first
+        // candidate under the threshold instead is the field-reported sliver
+        // bug: on low-signal content (dark themes, sparse text, blank pages)
+        // nearly every misalignment stays under the threshold, so the scan
+        // from the top "matches" at an absurdly large overlap and each frame
+        // contributes only a sliver. The true alignment is an exact pixel
+        // match — the minimum — even when the threshold can't discriminate.
+        // Each candidate is cheap: subsample columns (~96) and rows (≤128);
+        // sampled rows still align exactly, so the dip survives sampling.
         let coarseStride = max(1, top.width / 96)   // sample ~96 columns
 
         var coarseHit = -1
+        var coarseBest = Double.greatestFiniteMagnitude
         var overlap = maxOverlap
         while overlap > 0 {
-            if meanAbsoluteError(topRows: top, bottomRows: bottom, rows: overlap, columnStride: coarseStride) <= threshold {
+            // Strict `<` scanning from the largest overlap: ties (flat
+            // regions where any alignment matches) keep the larger overlap,
+            // which de-duplicates frames captured while the user paused.
+            let mae = meanAbsoluteError(topRows: top, bottomRows: bottom, rows: overlap, columnStride: coarseStride, maxSampledRows: 128)
+            if mae < coarseBest {
+                coarseBest = mae
                 coarseHit = overlap
-                break
             }
             overlap -= 1
         }
-        guard coarseHit >= 0 else { return 0 }
+        guard coarseHit >= 0, coarseBest <= threshold else { return 0 }
 
-        // Refine at full precision in a window around the subsampled hit and
-        // take the *best-aligned* overlap (minimum error), not merely the first
-        // under threshold. Several overlaps near a smooth seam can pass the
-        // threshold; the largest of them over-claims the overlap and drops a
-        // sliver of content — that's the residual tearing. The error minimum is
-        // the true pixel alignment. Search a little wide on the low side in
-        // case the subsampled pass over-estimated the overlap.
-        let hi = min(maxOverlap, coarseHit + 2)
+        // Refine at full precision around the subsampled minimum.
+        let hi = min(maxOverlap, coarseHit + 12)
         let lo = max(1, coarseHit - 12)
         var bestOverlap = -1
         var bestError = Double.greatestFiniteMagnitude
@@ -266,13 +400,15 @@ struct VisionStitchEngine: StitchEngine {
         return (bestError <= threshold && bestOverlap > 0) ? bestOverlap : 0
     }
 
-    private func meanAbsoluteError(topRows top: GrayscaleBuffer, bottomRows bottom: GrayscaleBuffer, rows: Int, columnStride: Int = 1) -> Double {
+    private func meanAbsoluteError(topRows top: GrayscaleBuffer, bottomRows bottom: GrayscaleBuffer, rows: Int, columnStride: Int = 1, maxSampledRows: Int = .max) -> Double {
         // Compare `rows` rows from the bottom of `top` against the top
         // `rows` rows of `bottom`. Both buffers have the same `width`.
-        // `columnStride` samples every Nth column (full rows are always kept,
-        // so the recovered overlap stays vertically exact).
+        // `columnStride` samples every Nth column and `maxSampledRows` caps
+        // the rows compared (evenly strided); sampled rows keep their exact
+        // vertical position, so the recovered overlap stays exact.
         let width = top.width
         let topStart = (top.height - rows) * width
+        let rowStride = max(1, rows / max(1, maxSampledRows))
 
         var sum: Double = 0
         var count = 0
@@ -290,7 +426,7 @@ struct VisionStitchEngine: StitchEngine {
                         count += 1
                         col += columnStride
                     }
-                    row += 1
+                    row += rowStride
                 }
             }
         }
@@ -303,16 +439,17 @@ struct VisionStitchEngine: StitchEngine {
     /// handful of frames sampled across the whole capture. Coordinates are in
     /// top-left pixel space (row 0 = visual top).
     private func staticBandHeights(_ frames: [CGImage], width: Int, height: Int) -> (top: Int, bottom: Int) {
-        guard frames.count >= 2, width > 0, height > 0 else { return (0, 0) }
-
-        // Sample up to 6 frames spread across the capture so we compare frames
-        // that actually scrolled relative to each other.
-        let sampleCount = min(6, frames.count)
-        let step = max(1, (frames.count - 1) / max(1, sampleCount - 1))
-        let samples = stride(from: 0, to: frames.count, by: step).map { frames[$0] }
-        let rasters = samples.compactMap { Self.topLeftGrayscale($0, width: width, height: height) }
+        let rasters = sampledRasters(frames, width: width, height: height)
         guard rasters.count >= 2, let reference = rasters.first else { return (0, 0) }
 
+        // Truly static rows (chrome, sidebars) are pixel-identical across
+        // frames — SCK delivers exact pixels, nothing dithers. The loose
+        // correlation threshold must NOT be reused here: on dark themes a
+        // *scrolled* sparse text row only nudges the row mean by a few gray
+        // levels, so under the loose threshold the whole content region reads
+        // "static", band detection gives up, and the full-frame path stacks
+        // chrome slivers (field-reported bug).
+        let staticRowThreshold = 1.0
         func rowIsStatic(_ y: Int) -> Bool {
             let base = y * width
             for raster in rasters.dropFirst() {
@@ -320,7 +457,7 @@ struct VisionStitchEngine: StitchEngine {
                 for x in 0..<width {
                     sum += abs(Int(reference[base + x]) - Int(raster[base + x]))
                 }
-                if Double(sum) / Double(width) > mismatchThreshold { return false }
+                if Double(sum) / Double(width) > staticRowThreshold { return false }
             }
             return true
         }

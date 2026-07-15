@@ -30,6 +30,10 @@ final class DesktopIconCover {
                 defer: false
             )
             SniprDiagnostics.disableRestoration(for: window)
+            // ARC owns these windows via `windows`; without this, close()
+            // also releases them and the double-release segfaults in the
+            // window-close animation.
+            window.isReleasedWhenClosed = false
             window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
             window.collectionBehavior = [.canJoinAllSpaces, .stationary]
             window.ignoresMouseEvents = true

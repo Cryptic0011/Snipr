@@ -44,6 +44,52 @@ struct RecordingSettingsTab: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Custom cursor") {
+                Toggle("Replace cursor in recordings", isOn: Binding(
+                    get: { model.preferences.recordingCustomCursor },
+                    set: { model.preferences.recordingCustomCursor = $0 }
+                ))
+                Text("Records with the real cursor hidden, then bakes in a redrawn cursor when the recording stops. Applies to region, window, and full-screen recordings.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Toggle("Smooth cursor movement", isOn: Binding(
+                    get: { model.preferences.recordingCursorSmoothing },
+                    set: { model.preferences.recordingCursorSmoothing = $0 }
+                ))
+                .disabled(!model.preferences.recordingCustomCursor)
+
+                LabeledContent("Cursor size") {
+                    HStack(spacing: 10) {
+                        Slider(value: Binding(
+                            get: { model.preferences.recordingCursorScale },
+                            set: { model.preferences.recordingCursorScale = $0 }
+                        ), in: 1.0...3.0, step: 0.25)
+                        .frame(width: 180)
+                        Text(String(format: "%.2f×", model.preferences.recordingCursorScale))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .frame(width: 48, alignment: .trailing)
+                    }
+                }
+                .disabled(!model.preferences.recordingCustomCursor)
+
+                LabeledContent("Cursor color") {
+                    Picker("Cursor color", selection: Binding(
+                        get: { model.preferences.recordingCursorColor },
+                        set: { model.preferences.recordingCursorColor = $0 }
+                    )) {
+                        ForEach(CursorColor.allCases) { color in
+                            Text(color.title).tag(color)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 120)
+                }
+                .disabled(!model.preferences.recordingCustomCursor)
+            }
+
             Section("While recording") {
                 Toggle("Show keystrokes", isOn: Binding(
                     get: { model.preferences.showKeystrokesWhileRecording },

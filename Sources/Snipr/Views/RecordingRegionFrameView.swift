@@ -7,15 +7,14 @@ struct RecordingRegionFrameView: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             Rectangle()
-                .strokeBorder(Color.red.opacity(0.96), lineWidth: 3)
-                .shadow(color: .red.opacity(0.9), radius: 6)
+                .strokeBorder(Color.red.opacity(0.85), lineWidth: 2)
+                .shadow(color: .red.opacity(0.3), radius: 2)
                 .padding(padding)
 
             HStack(spacing: 6) {
                 Circle()
                     .fill(Color.red)
                     .frame(width: 7, height: 7)
-                    .shadow(color: .red.opacity(0.8), radius: 5)
 
                 Text("\(Int(size.width)) × \(Int(size.height))")
                     .font(.system(size: 11, weight: .bold, design: .monospaced))

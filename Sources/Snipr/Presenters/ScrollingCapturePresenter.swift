@@ -83,12 +83,23 @@ final class ScrollingCapturePresenter {
                 return
             }
 
+            // Field diagnostics: `defaults write com.grayson.snipr
+            // SniprDebugKeepScrollFrames -bool YES` dumps the raw frames so a
+            // bad stitch can be reproduced offline as a fixture.
+            if UserDefaults.standard.bool(forKey: "SniprDebugKeepScrollFrames") {
+                Self.dumpDebugFrames(frames)
+            }
+
             do {
                 let format = self.preferences.captureFormat
                 let job = ScrollingStitchJob(frames: frames, stitchEngine: self.stitchEngine, format: format)
                 let result = try await Task.detached(priority: .userInitiated) {
                     try job.run()
                 }.value
+                if let reason = result.salvageReason {
+                    SniprDiagnostics.windowing.error("ScrollingCapture stitch failed, kept first frame error=\(String(describing: reason), privacy: .public)")
+                    self.onError?(ScrollingStitchSalvageNotice(underlying: reason))
+                }
                 let suggested = CaptureFilenameTemplate.expand(
                     template: self.preferences.captureFilenameTemplate,
                     date: Date(),
@@ -155,6 +166,23 @@ final class ScrollingCapturePresenter {
         return data as Data
     }
 
+    private nonisolated static func dumpDebugFrames(_ frames: [CGImage]) {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SniprScrollFrames-\(Int(Date().timeIntervalSince1970))")
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            for (index, frame) in frames.enumerated() {
+                let url = dir.appendingPathComponent(String(format: "frame-%03d.png", index))
+                guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else { continue }
+                CGImageDestinationAddImage(dest, frame, nil)
+                CGImageDestinationFinalize(dest)
+            }
+            SniprDiagnostics.windowing.error("ScrollingCapture debug frames dumped to \(dir.path, privacy: .public)")
+        } catch {
+            SniprDiagnostics.windowing.error("ScrollingCapture debug frame dump failed error=\(String(describing: error), privacy: .public)")
+        }
+    }
+
     private func showProgressHUD() {
         guard progressWindow == nil, let screen = NSScreen.main else { return }
         let panelWidth: CGFloat = 360
@@ -195,18 +223,50 @@ final class ScrollingCapturePresenter {
     }
 }
 
-private struct ScrollingStitchJob: @unchecked Sendable {
+/// The stitch failed but the user still got a capture: the first collected
+/// frame was kept so minutes of setup aren't thrown away with the seams.
+struct ScrollingStitchSalvageNotice: LocalizedError {
+    let underlying: Error
+
+    var errorDescription: String? {
+        "Couldn't stitch the scroll, so the first frame was kept in your stack instead. \(underlying.localizedDescription)"
+    }
+}
+
+// Internal (not private) so the salvage path is unit-testable with a fake
+// stitch engine — the SCStream side of scrolling capture can't run in tests.
+struct ScrollingStitchJob: @unchecked Sendable {
     let frames: [CGImage]
     let stitchEngine: any StitchEngine
     let format: CaptureFormat
 
-    func run() throws -> (data: Data, pixelSize: CGSize) {
-        guard let stitched = try stitchEngine.stitch(frames: frames) else {
-            throw StitchError.allFramesRejected
+    struct Output {
+        let data: Data
+        let pixelSize: CGSize
+        /// Non-nil when stitching failed and `data` is the first frame,
+        /// salvaged, rather than the tall composite.
+        let salvageReason: Error?
+    }
+
+    func run() throws -> Output {
+        do {
+            guard let stitched = try stitchEngine.stitch(frames: frames) else {
+                throw StitchError.allFramesRejected
+            }
+            return Output(
+                data: ScrollingCapturePresenter.encode(stitched, format: format),
+                pixelSize: CGSize(width: stitched.width, height: stitched.height),
+                salvageReason: nil
+            )
+        } catch {
+            // Salvage: a single viewport screenshot beats losing the whole
+            // session. Only a truly empty session still fails.
+            guard let first = frames.first else { throw error }
+            return Output(
+                data: ScrollingCapturePresenter.encode(first, format: format),
+                pixelSize: CGSize(width: first.width, height: first.height),
+                salvageReason: error
+            )
         }
-        return (
-            ScrollingCapturePresenter.encode(stitched, format: format),
-            CGSize(width: stitched.width, height: stitched.height)
-        )
     }
 }

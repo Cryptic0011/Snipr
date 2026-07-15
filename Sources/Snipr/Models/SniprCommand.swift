@@ -2,6 +2,7 @@ import Foundation
 
 enum SniprCommandID: String, CaseIterable, Codable, Sendable {
     case captureArea
+    case captureWindow
     case recordArea
     case captureToolbar
     case openHistory
@@ -21,6 +22,7 @@ enum SniprCommandID: String, CaseIterable, Codable, Sendable {
     var hotKeyAction: SniprHotKeyAction? {
         switch self {
         case .captureArea: .captureArea
+        case .captureWindow: .captureWindow
         case .recordArea: .screenRecord
         case .captureToolbar: .captureToolbar
         case .openHistory: .openApp
@@ -29,6 +31,31 @@ enum SniprCommandID: String, CaseIterable, Codable, Sendable {
         case .pickColor: .colorPick
         case .scrollingCapture: .scrollingCapture
         case .openSettings, .quit, .showOCRHistory, .scanQR, .toggleDesktopIcons: nil
+        }
+    }
+}
+
+extension SniprCommandID {
+    /// `snipr://` deep link → command, for the CLI (`open "snipr://capture"`),
+    /// Shortcuts, Raycast, and friends. Accepts the case-insensitive rawValue
+    /// with optional dashes/underscores (`snipr://capture-area`), plus short
+    /// aliases for the common verbs.
+    init?(url: URL) {
+        guard url.scheme?.lowercased() == "snipr" else { return nil }
+        let token = (url.host ?? url.path)
+            .lowercased()
+            .filter(\.isLetter)
+        guard !token.isEmpty else { return nil }
+
+        switch token {
+        case "capture": self = .captureArea
+        case "record": self = .recordArea
+        case "ocr": self = .ocrSelection
+        default:
+            guard let match = Self.allCases.first(where: { $0.rawValue.lowercased() == token }) else {
+                return nil
+            }
+            self = match
         }
     }
 }
@@ -67,6 +94,13 @@ struct SniprCommand: Identifiable, Equatable, Sendable {
             subtitle: "Select a screen region",
             systemImage: "selection.pin.in.out",
             shortcut: "⌘⇧4"
+        ),
+        .init(
+            id: .captureWindow,
+            title: "Capture Window",
+            subtitle: "Click a window to capture it",
+            systemImage: "macwindow",
+            shortcut: ""
         ),
         .init(
             id: .recordArea,
