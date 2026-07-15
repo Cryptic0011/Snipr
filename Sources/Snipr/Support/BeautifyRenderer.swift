@@ -39,25 +39,19 @@ enum BeautifyStyle: String, CaseIterable, Identifiable, Sendable, Codable {
     }
 }
 
-/// Wraps an image in padding, a gradient backdrop, rounded corners, and a
-/// drop shadow — the "make it look shareable" pass, applied at export time.
+/// Wraps an image in padding, a backdrop, rounded corners, and a drop
+/// shadow — the "make it look shareable" pass, applied at export time.
+/// Backdrop options and framing math are shared with the video export
+/// (`VideoBackdrop` / `ExportStyle`) so both surfaces look identical.
 enum BeautifyRenderer {
-    /// Canvas geometry for an image. Pure math so it's testable.
-    static func canvasGeometry(
-        for imageSize: CGSize,
-        paddingFraction: CGFloat = 0.08,
-        minPadding: CGFloat = 48
-    ) -> (canvas: CGSize, padding: CGFloat) {
-        let padding = max(minPadding, (min(imageSize.width, imageSize.height) * paddingFraction).rounded())
-        return (
-            CGSize(width: imageSize.width + padding * 2, height: imageSize.height + padding * 2),
-            padding
-        )
-    }
-
-    static func render(image: CGImage, style: BeautifyStyle, cornerRadius: CGFloat = 16) -> CGImage? {
+    static func render(
+        image: CGImage,
+        backdrop: VideoBackdrop,
+        style: ExportStyle,
+        screen: NSScreen? = nil
+    ) -> CGImage? {
         let imageSize = CGSize(width: image.width, height: image.height)
-        let (canvas, padding) = canvasGeometry(for: imageSize)
+        let (canvas, padding) = style.clamped().canvas(for: imageSize)
         let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
 
         guard let context = CGContext(
@@ -72,39 +66,34 @@ enum BeautifyRenderer {
             return nil
         }
 
-        let (top, bottom) = style.colors
-        guard let gradient = CGGradient(
-            colorsSpace: colorSpace,
-            colors: [
-                CGColor(colorSpace: colorSpace, components: top),
-                CGColor(colorSpace: colorSpace, components: bottom)
-            ].compactMap { $0 } as CFArray,
-            locations: [0, 1]
-        ) else {
-            return nil
-        }
-        context.drawLinearGradient(
-            gradient,
-            start: CGPoint(x: 0, y: canvas.height),
-            end: CGPoint(x: canvas.width, y: 0),
-            options: []
-        )
+        drawBackdrop(backdrop, in: context, canvas: canvas, colorSpace: colorSpace, screen: screen)
 
-        let imageRect = CGRect(x: padding, y: padding, width: imageSize.width, height: imageSize.height)
+        // Non-auto aspects expand one canvas dimension past padding*2, so
+        // center the image rather than trusting the padding inset.
+        let imageRect = CGRect(
+            x: ((canvas.width - imageSize.width) / 2).rounded(),
+            y: ((canvas.height - imageSize.height) / 2).rounded(),
+            width: imageSize.width,
+            height: imageSize.height
+        )
         let rounded = CGPath(
             roundedRect: imageRect,
-            cornerWidth: cornerRadius,
-            cornerHeight: cornerRadius,
+            cornerWidth: style.cornerRadius,
+            cornerHeight: style.cornerRadius,
             transform: nil
         )
+
+        // Same floor as VideoCompositor: at padding 0 a non-auto aspect can
+        // still leave backdrop showing, so the shadow shouldn't vanish.
+        let shadowScale = max(padding, min(imageSize.width, imageSize.height) * 0.04)
 
         // Shadow applies to the fill; the image is then drawn clipped to the
         // same rounded path so its corners match.
         context.saveGState()
         context.setShadow(
-            offset: CGSize(width: 0, height: -padding * 0.16),
-            blur: padding * 0.5,
-            color: CGColor(gray: 0, alpha: 0.45)
+            offset: CGSize(width: 0, height: -shadowScale * 0.16),
+            blur: shadowScale * 0.5,
+            color: CGColor(gray: 0, alpha: style.shadowOpacity)
         )
         context.addPath(rounded)
         context.setFillColor(CGColor(gray: 0, alpha: 1))
@@ -118,5 +107,51 @@ enum BeautifyRenderer {
         context.restoreGState()
 
         return context.makeImage()
+    }
+
+    private static func drawBackdrop(
+        _ backdrop: VideoBackdrop,
+        in context: CGContext,
+        canvas: CGSize,
+        colorSpace: CGColorSpace,
+        screen: NSScreen?
+    ) {
+        switch backdrop {
+        case .gradient(let style):
+            let (top, bottom) = style.colors
+            guard let gradient = CGGradient(
+                colorsSpace: colorSpace,
+                colors: [
+                    CGColor(colorSpace: colorSpace, components: top),
+                    CGColor(colorSpace: colorSpace, components: bottom)
+                ].compactMap { $0 } as CFArray,
+                locations: [0, 1]
+            ) else { return }
+            context.drawLinearGradient(
+                gradient,
+                start: CGPoint(x: 0, y: canvas.height),
+                end: CGPoint(x: canvas.width, y: 0),
+                options: []
+            )
+        case .bundled, .wallpaper, .customImage:
+            guard let nsImage = backdrop.resolveImage(for: screen),
+                  let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+                // Unreadable image — graphite gradient fallback, same as video.
+                drawBackdrop(.gradient(.graphite), in: context, canvas: canvas, colorSpace: colorSpace, screen: nil)
+                return
+            }
+            // Aspect-fill, centered.
+            let scale = max(canvas.width / CGFloat(cgImage.width), canvas.height / CGFloat(cgImage.height))
+            let size = CGSize(width: CGFloat(cgImage.width) * scale, height: CGFloat(cgImage.height) * scale)
+            context.draw(cgImage, in: CGRect(
+                x: (canvas.width - size.width) / 2,
+                y: (canvas.height - size.height) / 2,
+                width: size.width,
+                height: size.height
+            ))
+        case .color(let rgba):
+            context.setFillColor(rgba.cgColor)
+            context.fill(CGRect(origin: .zero, size: canvas))
+        }
     }
 }

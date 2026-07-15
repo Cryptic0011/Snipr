@@ -3,28 +3,49 @@ import XCTest
 @testable import Snipr
 
 final class BeautifyRendererTests: XCTestCase {
-    func testCanvasGeometryEnforcesMinimumPadding() {
-        let (canvas, padding) = BeautifyRenderer.canvasGeometry(for: CGSize(width: 100, height: 100))
-        XCTAssertEqual(padding, 48)
-        XCTAssertEqual(canvas, CGSize(width: 196, height: 196))
-    }
-
-    func testCanvasGeometryScalesPaddingWithImage() {
-        let (canvas, padding) = BeautifyRenderer.canvasGeometry(for: CGSize(width: 2000, height: 1000))
-        XCTAssertEqual(padding, 80) // 8% of the short side
-        XCTAssertEqual(canvas, CGSize(width: 2160, height: 1160))
-    }
-
-    func testRenderProducesPaddedImageWithBackdrop() throws {
+    func testRenderProducesPaddedImageWithGradientBackdrop() throws {
         let source = try XCTUnwrap(makeSolidImage(width: 100, height: 100, gray: 1.0))
-        let rendered = try XCTUnwrap(BeautifyRenderer.render(image: source, style: .ocean))
+        let rendered = try XCTUnwrap(
+            BeautifyRenderer.render(image: source, backdrop: .gradient(.ocean), style: ExportStyle())
+        )
 
-        XCTAssertEqual(rendered.width, 196)
-        XCTAssertEqual(rendered.height, 196)
+        // Default style: 8% of the short side = 8px padding each edge.
+        XCTAssertEqual(rendered.width, 116)
+        XCTAssertEqual(rendered.height, 116)
 
         // A corner pixel sits on the gradient, not the white source image.
         let corner = try XCTUnwrap(pixel(at: CGPoint(x: 2, y: 2), in: rendered))
         XCTAssertLessThan(corner.red, 0.9, "Corner should show the gradient backdrop, not the white image")
+    }
+
+    func testRenderFillsSolidColorBackdrop() throws {
+        let source = try XCTUnwrap(makeSolidImage(width: 100, height: 100, gray: 1.0))
+        let rendered = try XCTUnwrap(BeautifyRenderer.render(
+            image: source,
+            backdrop: .color(RGBA(red: 1, green: 0, blue: 0, alpha: 1)),
+            style: ExportStyle()
+        ))
+
+        // Generic-RGB → sRGB conversion shifts pure red a little; assert the
+        // corner is unambiguously red, not exact channel values.
+        let corner = try XCTUnwrap(pixel(at: CGPoint(x: 2, y: 2), in: rendered))
+        XCTAssertGreaterThan(corner.red, 0.85)
+        XCTAssertLessThan(corner.green, 0.3)
+    }
+
+    func testRenderExpandsCanvasToTargetAspect() throws {
+        let source = try XCTUnwrap(makeSolidImage(width: 100, height: 100, gray: 1.0))
+        var style = ExportStyle()
+        style.aspect = .widescreen
+        let rendered = try XCTUnwrap(
+            BeautifyRenderer.render(image: source, backdrop: .gradient(.ocean), style: style)
+        )
+
+        XCTAssertEqual(Double(rendered.width) / Double(rendered.height), 16.0 / 9.0, accuracy: 0.02)
+
+        // Image is centered: mid pixel is the white source.
+        let mid = try XCTUnwrap(pixel(at: CGPoint(x: rendered.width / 2, y: rendered.height / 2), in: rendered))
+        XCTAssertGreaterThan(mid.red, 0.9)
     }
 
     private func makeSolidImage(width: Int, height: Int, gray: CGFloat) -> CGImage? {

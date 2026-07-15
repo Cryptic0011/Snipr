@@ -18,7 +18,6 @@ struct VideoTrimView: View {
     @State private var backdrop: VideoBackdrop?
     @State private var style = ExportStyle.load()
     @State private var showStylePopover = false
-    @State private var customImageName: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,9 +42,6 @@ struct VideoTrimView: View {
         .onAppear {
             player = AVPlayer(url: item.fileURL)
             backdrop = VideoBackdrop.loadSelection()
-            if case .customImage(let url) = backdrop {
-                customImageName = url.lastPathComponent
-            }
         }
         .task {
             await loadDuration()
@@ -53,7 +49,6 @@ struct VideoTrimView: View {
         .onChange(of: style) { _, newValue in newValue.save() }
         .onChange(of: backdrop) { _, newValue in
             VideoBackdrop.saveSelection(newValue)
-            if case .customImage = newValue {} else { customImageName = nil }
         }
     }
 
@@ -68,107 +63,11 @@ struct VideoTrimView: View {
 
     @ViewBuilder
     private var backdropPreview: some View {
-        switch backdrop {
-        case .gradient(let style):
-            style.previewGradient
-        case .bundled, .wallpaper, .customImage:
-            if let image = backdrop?.resolveImage(for: nil) {
-                Image(nsImage: image).resizable().scaledToFill().clipped()
-            } else {
-                BeautifyStyle.graphite.previewGradient
-            }
-        case .color(let rgba):
-            Color(red: rgba.red, green: rgba.green, blue: rgba.blue, opacity: rgba.alpha)
-        case nil:
+        if let backdrop {
+            BackdropPreview(backdrop: backdrop)
+        } else {
             Color.black
         }
-    }
-
-    private var colorBinding: Binding<Color> {
-        Binding(
-            get: {
-                if case .color(let rgba) = backdrop { return rgba.color }
-                return Color.black
-            },
-            set: { backdrop = .color(RGBA(color: $0)) }
-        )
-    }
-
-    private var stylePopover: some View {
-        Form {
-            Section("Background") {
-                Picker("Preset", selection: $backdrop) {
-                    Text("None").tag(VideoBackdrop?.none)
-                    // .color and .customImage are chosen via the ColorPicker
-                    // and file chooser below, not this list — without a
-                    // matching tag for them, selecting either produces a
-                    // SwiftUI "no tag matching selection" runtime warning.
-                    switch backdrop {
-                    case .color, .customImage:
-                        Text(backdrop?.title ?? "").tag(backdrop).disabled(true)
-                    default:
-                        EmptyView()
-                    }
-                    ForEach(VideoBackdrop.pickerGroups, id: \.label) { group in
-                        Section(group.label) {
-                            ForEach(group.options) { option in
-                                Text(option.title).tag(VideoBackdrop?.some(option))
-                            }
-                        }
-                    }
-                }
-
-                SwiftUI.ColorPicker("Color", selection: colorBinding, supportsOpacity: false)
-
-                LabeledContent("Custom Image") {
-                    Button(customImageName ?? "Choose…") {
-                        let panel = NSOpenPanel()
-                        panel.allowedContentTypes = [.image]
-                        panel.allowsMultipleSelection = false
-                        if panel.runModal() == .OK, let url = panel.url {
-                            backdrop = .customImage(url)
-                            customImageName = url.lastPathComponent
-                        }
-                    }
-                }
-
-                if case .bundled = backdrop {
-                    Text("Bundled wallpapers courtesy of the Recordly project.")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-
-            Section("Frame") {
-                LabeledContent("Padding") {
-                    Slider(value: $style.paddingFraction, in: 0...0.30)
-                    Text(style.paddingFraction, format: .percent.precision(.fractionLength(0)))
-                        .monospacedDigit().frame(width: 44, alignment: .trailing)
-                }
-                LabeledContent("Corner radius") {
-                    Slider(value: $style.cornerRadius, in: 0...40)
-                    Text("\(Int(style.cornerRadius))")
-                        .monospacedDigit().frame(width: 44, alignment: .trailing)
-                }
-                LabeledContent("Shadow") {
-                    Slider(value: $style.shadowOpacity, in: 0...1)
-                    Text(style.shadowOpacity, format: .percent.precision(.fractionLength(0)))
-                        .monospacedDigit().frame(width: 44, alignment: .trailing)
-                }
-            }
-
-            Section("Canvas") {
-                Picker("Aspect", selection: $style.aspect) {
-                    ForEach(CanvasAspect.allCases) { aspect in
-                        Text(aspect.title).tag(aspect)
-                    }
-                }
-                .pickerStyle(.segmented)
-            }
-        }
-        .formStyle(.grouped)
-        .frame(width: 340)
-        .padding(8)
     }
 
     private var controls: some View {
@@ -183,7 +82,7 @@ struct VideoTrimView: View {
                     Label("Style", systemImage: "paintbrush")
                 }
                 .popover(isPresented: $showStylePopover, arrowEdge: .bottom) {
-                    stylePopover
+                    ExportStylePopover(backdrop: $backdrop, style: $style)
                 }
             }
 
